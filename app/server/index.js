@@ -24,6 +24,23 @@ const asyncRoute = (handler) => async (req, res) => {
 
 const intOrNull = (value) => (value ? parseInt(value, 10) : null);
 
+const fullAccessRoles = new Set(['owner', 'finance', '老板', '财务']);
+
+const hasFullAccess = (req) => {
+  const role = String(req.get('x-shopfluence-role') || '').trim();
+  return fullAccessRoles.has(role);
+};
+
+const requireFullAccess = (req, res, next) => {
+  if (hasFullAccess(req)) {
+    next();
+    return;
+  }
+  res.status(403).json({ success: false, error: '没有权限访问财务数据' });
+};
+
+app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
+
 app.get('/api/influencers', asyncRoute(async (req, res) => {
   const data = await models.getInfluencers({
     status: req.query.status,

@@ -1,10 +1,34 @@
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+const AUTH_STORAGE_KEY = 'shopfluence_current_user';
+
+const roleCodeByName: Record<string, string> = {
+  老板: 'owner',
+  财务: 'finance',
+  运营: 'operator',
+};
 
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 10000,
+});
+
+// 请求拦截器 - 把当前登录角色传给后端做权限判断
+api.interceptors.request.use((config) => {
+  try {
+    const rawUser = localStorage.getItem(AUTH_STORAGE_KEY);
+    if (rawUser) {
+      const user = JSON.parse(rawUser);
+      const roleCode = roleCodeByName[user.role] || 'operator';
+      config.headers = config.headers || {};
+      (config.headers as any)['X-Shopfluence-Role'] = roleCode;
+      (config.headers as any)['X-Shopfluence-User'] = encodeURIComponent(user.username || user.name || '');
+    }
+  } catch (error) {
+    console.warn('读取当前用户权限失败:', error);
+  }
+  return config;
 });
 
 // 响应拦截器 - 返回完整响应对象
