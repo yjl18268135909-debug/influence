@@ -1,0 +1,232 @@
+const express = require('express');
+const cors = require('cors');
+const bodyParser = require('body-parser');
+const path = require('path');
+const fs = require('fs');
+
+const models = process.env.DATABASE_URL ? require('./models-postgres') : require('./models');
+
+const app = express();
+const PORT = process.env.PORT || 5001;
+
+app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
+app.use(bodyParser.json({ limit: '25mb' }));
+app.use(bodyParser.urlencoded({ extended: true, limit: '25mb' }));
+
+const asyncRoute = (handler) => async (req, res) => {
+  try {
+    await handler(req, res);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+const intOrNull = (value) => (value ? parseInt(value, 10) : null);
+
+app.get('/api/influencers', asyncRoute(async (req, res) => {
+  const data = await models.getInfluencers({
+    status: req.query.status,
+    platform: req.query.platform,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/influencers', asyncRoute(async (req, res) => {
+  const data = await models.createInfluencer(req.body);
+  res.json({ success: true, data });
+}));
+
+app.put('/api/influencers/:id', asyncRoute(async (req, res) => {
+  const data = await models.updateInfluencer(parseInt(req.params.id, 10), req.body);
+  res.json({ success: true, data });
+}));
+
+app.delete('/api/influencers/:id', asyncRoute(async (req, res) => {
+  await models.deleteInfluencer(parseInt(req.params.id, 10));
+  res.json({ success: true });
+}));
+
+app.get('/api/merchants', asyncRoute(async (req, res) => {
+  const data = await models.getMerchants({
+    status: req.query.status,
+    platform: req.query.platform,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/merchants', asyncRoute(async (req, res) => {
+  const data = await models.createMerchant(req.body);
+  res.json({ success: true, data });
+}));
+
+app.put('/api/merchants/:id', asyncRoute(async (req, res) => {
+  const data = await models.updateMerchant(parseInt(req.params.id, 10), req.body);
+  res.json({ success: true, data });
+}));
+
+app.delete('/api/merchants/:id', asyncRoute(async (req, res) => {
+  await models.deleteMerchant(parseInt(req.params.id, 10));
+  res.json({ success: true });
+}));
+
+app.get('/api/live-sessions', asyncRoute(async (req, res) => {
+  const data = await models.getLiveSessions({
+    influencer_id: intOrNull(req.query.influencer_id),
+    merchant_id: intOrNull(req.query.merchant_id),
+    platform: req.query.platform,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/live-sessions', asyncRoute(async (req, res) => {
+  const data = await models.createLiveSession(req.body);
+  res.json({ success: true, data });
+}));
+
+app.put('/api/live-sessions/:id', asyncRoute(async (req, res) => {
+  const data = await models.updateLiveSession(parseInt(req.params.id, 10), req.body);
+  res.json({ success: true, data });
+}));
+
+app.delete('/api/live-sessions/:id', asyncRoute(async (req, res) => {
+  await models.deleteLiveSession(parseInt(req.params.id, 10));
+  res.json({ success: true });
+}));
+
+app.get('/api/orders', asyncRoute(async (req, res) => {
+  const data = await models.getOrders({
+    influencer_id: intOrNull(req.query.influencer_id),
+    merchant_id: intOrNull(req.query.merchant_id),
+    platform: req.query.platform,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+    settlement_status: req.query.settlement_status,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/orders', asyncRoute(async (req, res) => {
+  const data = await models.createOrder(req.body);
+  res.json({ success: true, data });
+}));
+
+app.get('/api/expenses', asyncRoute(async (req, res) => {
+  const data = await models.getExpenses({
+    type: req.query.type,
+    category: req.query.category,
+    related_influencer_id: intOrNull(req.query.related_influencer_id),
+    related_merchant_id: intOrNull(req.query.related_merchant_id),
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/expenses', asyncRoute(async (req, res) => {
+  const data = await models.createExpense(req.body);
+  res.json({ success: true, data });
+}));
+
+app.get('/api/costs', asyncRoute(async (req, res) => {
+  const data = await models.getCosts({
+    type: req.query.type,
+    category: req.query.category,
+    related_influencer_id: intOrNull(req.query.related_influencer_id),
+    related_merchant_id: intOrNull(req.query.related_merchant_id),
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/costs', asyncRoute(async (req, res) => {
+  const data = await models.createCost(req.body);
+  res.json({ success: true, data });
+}));
+
+app.get('/api/income', asyncRoute(async (req, res) => {
+  if (!models.getIncome) {
+    res.json({ success: true, data: [] });
+    return;
+  }
+  const data = await models.getIncome({
+    type: req.query.type,
+    category: req.query.category,
+    related_influencer_id: intOrNull(req.query.related_influencer_id),
+    related_merchant_id: intOrNull(req.query.related_merchant_id),
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/income', asyncRoute(async (req, res) => {
+  if (!models.createIncome) {
+    res.status(404).json({ success: false, error: 'income API is not available in this data layer' });
+    return;
+  }
+  const data = await models.createIncome(req.body);
+  res.json({ success: true, data });
+}));
+
+app.get('/api/reports/summary', asyncRoute(async (req, res) => {
+  const data = await models.getFinancialSummary({
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+    influencerId: intOrNull(req.query.influencerId),
+    platform: req.query.platform,
+  });
+  res.json({ success: true, data });
+}));
+
+app.get('/api/reports/influencer-ranking', asyncRoute(async (req, res) => {
+  const data = await models.getInfluencerRanking({
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+    platform: req.query.platform,
+  });
+  res.json({ success: true, data });
+}));
+
+app.get('/api/reports/platform-comparison', asyncRoute(async (req, res) => {
+  const data = await models.getPlatformComparison({
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  });
+  res.json({ success: true, data });
+}));
+
+app.get('/api/reports/monthly-trend', asyncRoute(async (req, res) => {
+  const data = await models.getMonthlyTrend({
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+    influencerId: intOrNull(req.query.influencerId),
+    platform: req.query.platform,
+  });
+  res.json({ success: true, data });
+}));
+
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    database: process.env.DATABASE_URL ? 'postgres' : 'sqlite',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+const distDir = path.join(__dirname, '../dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(distDir)) {
+  app.use(express.static(distDir));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distDir, 'index.html'));
+  });
+}
+
+app.listen(PORT, () => {
+  console.log(`服务器运行在 http://localhost:${PORT}`);
+  console.log(`数据层: ${process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite'}`);
+  console.log(`API健康检查: http://localhost:${PORT}/api/health`);
+});
