@@ -238,7 +238,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
             <span>ShopFluence达人直播管理系统</span>
             <Space size={12}>
               <Text type="secondary">
-                {currentUser.name}（{currentUser.role}）
+                {currentUser.name}
               </Text>
               <Button size="small" icon={<LogoutOutlined />} onClick={onLogout}>
                 退出
