@@ -10,6 +10,7 @@ import {
   TeamOutlined,
   LockOutlined,
   LogoutOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import Influencers from './pages/Influencers';
 import Merchants from './pages/Merchants';
@@ -17,22 +18,18 @@ import MerchantIntroduction from './pages/MerchantIntroduction';
 import LiveSessions from './pages/LiveSessions';
 import EmployeeManagement from './pages/EmployeeManagement';
 import FinanceManagement from './pages/FinanceManagement';
-import { defaultEmployees, EMPLOYEES_STORAGE_KEY } from './data/employees';
+import Settings from './pages/Settings';
+import { accountApi } from './api';
 
 const { Header, Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
 const AUTH_STORAGE_KEY = 'shopfluence_current_user';
-const DEFAULT_PASSWORD = '123456';
 
 type CurrentUser = {
   username: string;
   name: string;
   role: string;
-};
-
-type LoginAccount = CurrentUser & {
-  password: string;
 };
 
 type MenuItem = {
@@ -50,6 +47,7 @@ const menuItems: MenuItem[] = [
   { key: '/merchants', icon: <ShopOutlined />, label: '商家管理' },
   { key: '/employees', icon: <TeamOutlined />, label: '员工管理' },
   { key: '/finance', icon: <WalletOutlined />, label: '财务管理', financeOnly: true },
+  { key: '/settings', icon: <SettingOutlined />, label: '设置', financeOnly: true },
 ];
 
 const readStorage = <T,>(key: string, fallback: T): T => {
@@ -65,46 +63,26 @@ const canViewFinance = (user: CurrentUser | null) => {
   return user ? ['老板', '财务'].includes(user.role) : false;
 };
 
-const getLoginAccounts = (): LoginAccount[] => {
-  const storedEmployees = readStorage<typeof defaultEmployees>(EMPLOYEES_STORAGE_KEY, defaultEmployees);
-  const employeeAccounts = storedEmployees
-    .filter((employee) => employee.name && employee.status !== 'inactive')
-    .map((employee) => ({
-      username: employee.name,
-      password: DEFAULT_PASSWORD,
-      name: employee.name,
-      role: employee.role || '员工',
-    }));
-
-  return [
-    { username: 'weilun', password: DEFAULT_PASSWORD, name: 'weilun', role: '老板' },
-    { username: 'boss', password: DEFAULT_PASSWORD, name: '老板', role: '老板' },
-    { username: 'finance', password: DEFAULT_PASSWORD, name: '财务', role: '财务' },
-    ...employeeAccounts,
-  ];
-};
-
 const LoginScreen: React.FC<{ onLogin: (user: CurrentUser) => void }> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (values: { username: string; password: string }) => {
+  const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
-    const username = values.username.trim();
-    const account = getLoginAccounts().find(
-      (item) => item.username === username && item.password === values.password
-    );
-
-    if (!account) {
-      message.error('账号或密码不正确');
+    try {
+      const response = await accountApi.login({
+        username: values.username.trim(),
+        password: values.password,
+      });
+      const account = response.data.data;
+      const currentUser = { username: account.username, name: account.name, role: account.role };
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
+      onLogin(currentUser);
+      message.success(`已登录：${account.name}`);
+    } catch (error: any) {
+      message.error(error.response?.data?.error || '账号或密码不正确');
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const currentUser = { username: account.username, name: account.name, role: account.role };
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
-    onLogin(currentUser);
-    message.success(`已登录：${account.name}`);
-    setLoading(false);
   };
 
   return (
@@ -272,6 +250,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
               <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />
               <Route path="/employees" element={<EmployeeManagement />} />
               <Route path="/finance" element={canViewFinance(currentUser) ? <FinanceManagement /> : <Navigate to={defaultRoute} replace />} />
+              <Route path="/settings" element={canViewFinance(currentUser) ? <Settings /> : <Navigate to={defaultRoute} replace />} />
               <Route path="*" element={<Navigate to={defaultRoute} replace />} />
             </Routes>
           </div>

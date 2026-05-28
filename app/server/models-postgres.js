@@ -15,6 +15,102 @@ function mapInsertResult(row, data) {
   return { id: row.id, ...data };
 }
 
+async function ensureAccountsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_accounts (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  const existing = await one('SELECT COUNT(*)::int as count FROM app_accounts');
+  if (!existing.count) {
+    await query(
+      `INSERT INTO app_accounts (username, password, name, role, status)
+       VALUES
+       ($1,$2,$3,$4,'active'),
+       ($5,$6,$7,$8,'active'),
+       ($9,$10,$11,$12,'active'),
+       ($13,$14,$15,$16,'active'),
+       ($17,$18,$19,$20,'active'),
+       ($21,$22,$23,$24,'active')`,
+      [
+        'weilun', '123456', 'weilun', '老板',
+        'boss', '123456', '老板', '老板',
+        'finance', '123456', '财务', '财务',
+        'Mia', '123456', 'Mia', '运营',
+        'Aaron', '123456', 'Aaron', '运营',
+        'Sophie', '123456', 'Sophie', '运营',
+      ]
+    );
+  }
+}
+
+async function getAccounts() {
+  await ensureAccountsTable();
+  return query(`
+    SELECT id, username, name, role, status, created_at, updated_at
+    FROM app_accounts
+    ORDER BY id ASC
+  `);
+}
+
+async function findAccountByLogin(username, password) {
+  await ensureAccountsTable();
+  return one(
+    `SELECT id, username, name, role, status
+     FROM app_accounts
+     WHERE username = $1 AND password = $2 AND status = 'active'
+     LIMIT 1`,
+    [username, password]
+  );
+}
+
+async function createAccount(data) {
+  await ensureAccountsTable();
+  const row = await one(
+    `INSERT INTO app_accounts (username, password, name, role, status)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, username, name, role, status, created_at, updated_at`,
+    [data.username, data.password || '123456', data.name, data.role, data.status || 'active']
+  );
+  return row;
+}
+
+async function updateAccount(id, data) {
+  await ensureAccountsTable();
+  const current = await one('SELECT * FROM app_accounts WHERE id = $1', [id]);
+  if (!current) return null;
+
+  const row = await one(
+    `UPDATE app_accounts
+     SET username = $1, password = $2, name = $3, role = $4, status = $5, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $6
+     RETURNING id, username, name, role, status, created_at, updated_at`,
+    [
+      data.username,
+      data.password ? data.password : current.password,
+      data.name,
+      data.role,
+      data.status || 'active',
+      id,
+    ]
+  );
+  return row;
+}
+
+async function deleteAccount(id) {
+  await ensureAccountsTable();
+  await query('DELETE FROM app_accounts WHERE id = $1', [id]);
+  return { success: true };
+}
+
 async function getInfluencers(filters = {}) {
   const where = ["account NOT LIKE 'placeholder_%'", "account NOT LIKE 'live_%'"];
   const params = [];
@@ -650,6 +746,11 @@ async function getMonthlyTrend(filters = {}) {
 }
 
 module.exports = {
+  getAccounts,
+  findAccountByLogin,
+  createAccount,
+  updateAccount,
+  deleteAccount,
   getInfluencers,
   createInfluencer,
   updateInfluencer,

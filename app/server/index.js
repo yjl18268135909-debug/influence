@@ -39,7 +39,56 @@ const requireFullAccess = (req, res, next) => {
   res.status(403).json({ success: false, error: '没有权限访问财务数据' });
 };
 
-app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
+app.use(['/api/accounts', '/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
+
+app.post('/api/auth/login', asyncRoute(async (req, res) => {
+  const username = String(req.body.username || '').trim();
+  const password = String(req.body.password || '');
+
+  if (!username || !password) {
+    res.status(400).json({ success: false, error: '请输入账号和密码' });
+    return;
+  }
+
+  const account = await models.findAccountByLogin(username, password);
+  if (!account) {
+    res.status(401).json({ success: false, error: '账号或密码不正确' });
+    return;
+  }
+
+  res.json({
+    success: true,
+    data: {
+      username: account.username,
+      name: account.name,
+      role: account.role,
+    },
+  });
+}));
+
+app.get('/api/accounts', asyncRoute(async (req, res) => {
+  const data = await models.getAccounts();
+  res.json({ success: true, data });
+}));
+
+app.post('/api/accounts', asyncRoute(async (req, res) => {
+  const data = await models.createAccount(req.body);
+  res.json({ success: true, data });
+}));
+
+app.put('/api/accounts/:id', asyncRoute(async (req, res) => {
+  const data = await models.updateAccount(parseInt(req.params.id, 10), req.body);
+  if (!data) {
+    res.status(404).json({ success: false, error: '账号不存在' });
+    return;
+  }
+  res.json({ success: true, data });
+}));
+
+app.delete('/api/accounts/:id', asyncRoute(async (req, res) => {
+  await models.deleteAccount(parseInt(req.params.id, 10));
+  res.json({ success: true });
+}));
 
 app.get('/api/influencers', asyncRoute(async (req, res) => {
   const data = await models.getInfluencers({

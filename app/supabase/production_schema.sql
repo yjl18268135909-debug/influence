@@ -187,6 +187,27 @@ create table public.income (
   created_at timestamptz default current_timestamp
 );
 
+create table if not exists public.app_accounts (
+  id serial primary key,
+  username text unique not null,
+  password text not null,
+  name text not null,
+  role text not null,
+  status text default 'active',
+  created_at timestamptz default current_timestamp,
+  updated_at timestamptz default current_timestamp
+);
+
+insert into public.app_accounts (username, password, name, role, status)
+values
+  ('weilun', '123456', 'weilun', '老板', 'active'),
+  ('boss', '123456', '老板', '老板', 'active'),
+  ('finance', '123456', '财务', '财务', 'active'),
+  ('Mia', '123456', 'Mia', '运营', 'active'),
+  ('Aaron', '123456', 'Aaron', '运营', 'active'),
+  ('Sophie', '123456', 'Sophie', '运营', 'active')
+on conflict (username) do nothing;
+
 create index idx_orders_influencer on public.orders(influencer_id);
 create index idx_orders_merchant on public.orders(merchant_id);
 create index idx_orders_date on public.orders(order_date);
@@ -206,5 +227,6 @@ alter table public.orders disable row level security;
 alter table public.expenses disable row level security;
 alter table public.costs disable row level security;
 alter table public.income disable row level security;
+alter table public.app_accounts disable row level security;
 
 commit;

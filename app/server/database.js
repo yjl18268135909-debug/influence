@@ -233,6 +233,36 @@ function initDatabase() {
     )
   `);
 
+  // 系统账号表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS app_accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  const accountCount = db.prepare('SELECT COUNT(*) as count FROM app_accounts').get();
+  if (!accountCount.count) {
+    const insertAccount = db.prepare(`
+      INSERT INTO app_accounts (username, password, name, role, status)
+      VALUES (?, ?, ?, ?, 'active')
+    `);
+    [
+      ['weilun', '123456', 'weilun', '老板'],
+      ['boss', '123456', '老板', '老板'],
+      ['finance', '123456', '财务', '财务'],
+      ['Mia', '123456', 'Mia', '运营'],
+      ['Aaron', '123456', 'Aaron', '运营'],
+      ['Sophie', '123456', 'Sophie', '运营'],
+    ].forEach((account) => insertAccount.run(...account));
+  }
+
   // 创建索引
   db.exec('CREATE INDEX IF NOT EXISTS idx_orders_influencer ON orders(influencer_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_orders_merchant ON orders(merchant_id)');

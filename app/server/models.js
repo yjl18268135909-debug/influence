@@ -1,5 +1,73 @@
 const db = require('./database');
 
+// ==================== 系统账号相关操作 ====================
+
+function getAccounts() {
+  return db.prepare(`
+    SELECT id, username, name, role, status, created_at, updated_at
+    FROM app_accounts
+    ORDER BY id ASC
+  `).all();
+}
+
+function findAccountByLogin(username, password) {
+  return db.prepare(`
+    SELECT id, username, name, role, status
+    FROM app_accounts
+    WHERE username = ? AND password = ? AND status = 'active'
+    LIMIT 1
+  `).get(username, password);
+}
+
+function createAccount(data) {
+  const stmt = db.prepare(`
+    INSERT INTO app_accounts (username, password, name, role, status)
+    VALUES (?, ?, ?, ?, ?)
+  `);
+  const result = stmt.run(
+    data.username,
+    data.password || '123456',
+    data.name,
+    data.role,
+    data.status || 'active'
+  );
+  return db.prepare(`
+    SELECT id, username, name, role, status, created_at, updated_at
+    FROM app_accounts
+    WHERE id = ?
+  `).get(result.lastInsertRowid);
+}
+
+function updateAccount(id, data) {
+  const current = db.prepare('SELECT * FROM app_accounts WHERE id = ?').get(id);
+  if (!current) return null;
+
+  const nextPassword = data.password ? data.password : current.password;
+  db.prepare(`
+    UPDATE app_accounts
+    SET username = ?, password = ?, name = ?, role = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    data.username,
+    nextPassword,
+    data.name,
+    data.role,
+    data.status || 'active',
+    id
+  );
+
+  return db.prepare(`
+    SELECT id, username, name, role, status, created_at, updated_at
+    FROM app_accounts
+    WHERE id = ?
+  `).get(id);
+}
+
+function deleteAccount(id) {
+  db.prepare('DELETE FROM app_accounts WHERE id = ?').run(id);
+  return { success: true };
+}
+
 // ==================== 达人相关操作 ====================
 
 // 获取所有达人
@@ -835,6 +903,11 @@ function getMonthlyTrend(filters = {}) {
 }
 
 module.exports = {
+  getAccounts,
+  findAccountByLogin,
+  createAccount,
+  updateAccount,
+  deleteAccount,
   // 达人
   getInfluencers,
   createInfluencer,

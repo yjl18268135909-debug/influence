@@ -41,6 +41,15 @@ api.interceptors.response.use(
 );
 
 // 达人相关API
+export const accountApi = {
+  login: (data: { username: string; password: string }) => api.post('/auth/login', data),
+  getAll: () => api.get('/accounts'),
+  create: (data: any) => api.post('/accounts', data),
+  update: (id: number | string, data: any) => api.put(`/accounts/${id}`, data),
+  delete: (id: number | string) => api.delete(`/accounts/${id}`),
+};
+
+// 达人相关API
 export const influencerApi = {
   getAll: (params?: any) => api.get('/influencers', { params }),
   create: (data: any) => api.post('/influencers', data),
