@@ -25,6 +25,7 @@ const asyncRoute = (handler) => async (req, res) => {
 const intOrNull = (value) => (value ? parseInt(value, 10) : null);
 
 const fullAccessRoles = new Set(['owner', 'finance', '老板', '财务']);
+const ownerRoles = new Set(['owner', '老板']);
 
 const hasFullAccess = (req) => {
   const role = String(req.get('x-shopfluence-role') || '').trim();
@@ -39,7 +40,17 @@ const requireFullAccess = (req, res, next) => {
   res.status(403).json({ success: false, error: '没有权限访问财务数据' });
 };
 
-app.use(['/api/accounts', '/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
+const requireOwner = (req, res, next) => {
+  const role = String(req.get('x-shopfluence-role') || '').trim();
+  if (ownerRoles.has(role)) {
+    next();
+    return;
+  }
+  res.status(403).json({ success: false, error: '只有老板账号可以管理账号权限' });
+};
+
+app.use('/api/accounts', requireOwner);
+app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
 
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const username = String(req.body.username || '').trim();

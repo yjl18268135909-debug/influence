@@ -37,6 +37,7 @@ type MenuItem = {
   icon: React.ReactNode;
   label: string;
   financeOnly?: boolean;
+  ownerOnly?: boolean;
 };
 
 const menuItems: MenuItem[] = [
@@ -47,7 +48,7 @@ const menuItems: MenuItem[] = [
   { key: '/merchants', icon: <ShopOutlined />, label: '商家管理' },
   { key: '/employees', icon: <TeamOutlined />, label: '员工管理' },
   { key: '/finance', icon: <WalletOutlined />, label: '财务管理', financeOnly: true },
-  { key: '/settings', icon: <SettingOutlined />, label: '设置', financeOnly: true },
+  { key: '/settings', icon: <SettingOutlined />, label: '设置', ownerOnly: true },
 ];
 
 const readStorage = <T,>(key: string, fallback: T): T => {
@@ -61,6 +62,10 @@ const readStorage = <T,>(key: string, fallback: T): T => {
 
 const canViewFinance = (user: CurrentUser | null) => {
   return user ? ['老板', '财务'].includes(user.role) : false;
+};
+
+const canManageAccounts = (user: CurrentUser | null) => {
+  return user?.role === '老板';
 };
 
 const LoginScreen: React.FC<{ onLogin: (user: CurrentUser) => void }> = ({ onLogin }) => {
@@ -127,9 +132,14 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
   const [selectedKey, setSelectedKey] = useState('/');
   const navigate = useNavigate();
   const location = useLocation();
-  const visibleMenuItems = menuItems.filter((item) => !item.financeOnly || canViewFinance(currentUser));
+  const visibleMenuItems = menuItems.filter((item) => {
+    if (item.ownerOnly) return canManageAccounts(currentUser);
+    if (item.financeOnly) return canViewFinance(currentUser);
+    return true;
+  });
   const defaultRoute = visibleMenuItems[0]?.key || '/schedule-communication';
   const restrictedFinanceRoutes = ['/finance', '/travel-costs'];
+  const ownerOnlyRoutes = ['/settings'];
 
   const {
     token: { colorBgContainer, borderRadiusLG },
@@ -137,6 +147,11 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
 
   useEffect(() => {
     if (!canViewFinance(currentUser) && restrictedFinanceRoutes.includes(location.pathname)) {
+      navigate(defaultRoute, { replace: true });
+      return;
+    }
+
+    if (!canManageAccounts(currentUser) && ownerOnlyRoutes.includes(location.pathname)) {
       navigate(defaultRoute, { replace: true });
       return;
     }
@@ -250,7 +265,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
               <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />
               <Route path="/employees" element={<EmployeeManagement />} />
               <Route path="/finance" element={canViewFinance(currentUser) ? <FinanceManagement /> : <Navigate to={defaultRoute} replace />} />
-              <Route path="/settings" element={canViewFinance(currentUser) ? <Settings /> : <Navigate to={defaultRoute} replace />} />
+              <Route path="/settings" element={canManageAccounts(currentUser) ? <Settings /> : <Navigate to={defaultRoute} replace />} />
               <Route path="*" element={<Navigate to={defaultRoute} replace />} />
             </Routes>
           </div>
