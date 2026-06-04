@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { liveSessionApi } from '../api';
@@ -65,6 +65,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [open, setOpen] = useState(false);
   const [receptionRecord, setReceptionRecord] = useState<any | null>(null);
+  const [editingTravelCostRecord, setEditingTravelCostRecord] = useState<any | null>(null);
   const [editingReceivableSession, setEditingReceivableSession] = useState<any | null>(null);
   const [receivedStatus, setReceivedStatus] = useState<Record<string, boolean>>(() => readStorage(TRAVEL_RECEIVED_STATUS_STORAGE_KEY, {}));
   const [calendarMonth, setCalendarMonth] = useState<Dayjs>(dayjs());
@@ -72,6 +73,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [travelFilters, setTravelFilters] = useState<any>({ month: dayjs() });
   const [form] = Form.useForm();
   const [travelCostForm] = Form.useForm();
+  const [travelCostEditForm] = Form.useForm();
   const [receptionForm] = Form.useForm();
   const [receivableAmountForm] = Form.useForm();
   const watchedTravelValues = Form.useWatch([], travelCostForm);
@@ -313,6 +315,42 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     });
   };
 
+  const openTravelCostEditModal = (record: any) => {
+    setEditingTravelCostRecord(record);
+    travelCostEditForm.setFieldsValue({
+      flight_cost: Number(record.flight_cost || 0),
+      hotel_cost: Number(record.hotel_cost || 0),
+      business_car_cost: Number(record.business_car_cost || 0),
+    });
+  };
+
+  const saveTravelCostAmounts = async () => {
+    const values = await travelCostEditForm.validateFields();
+    setTravelCostRecords((prev) => prev.map((item) => {
+      if (item.id !== editingTravelCostRecord?.id) return item;
+
+      const next = {
+        ...item,
+        flight_cost: Number(values.flight_cost || 0),
+        hotel_cost: Number(values.hotel_cost || 0),
+        business_car_cost: Number(values.business_car_cost || 0),
+      };
+      const flightHotelCost = Number(next.flight_cost || 0) + Number(next.hotel_cost || 0);
+      const sessionCount = Number(next.session_count || 0);
+      const tapSessionCount = Number(next.tap_session_count || 0);
+      return {
+        ...next,
+        total_cost: getRecordTotalCost(next),
+        flight_hotel_cost: flightHotelCost,
+        per_session_flight_hotel_cost: sessionCount ? flightHotelCost / sessionCount : 0,
+        per_tap_flight_hotel_cost: tapSessionCount ? flightHotelCost / tapSessionCount : 0,
+      };
+    }));
+    setEditingTravelCostRecord(null);
+    travelCostEditForm.resetFields();
+    message.success('行程成本金额已更新');
+  };
+
   const saveReceptionCosts = async () => {
     const values = await receptionForm.validateFields();
     setTravelCostRecords((prev) => prev.map((item) => {
@@ -500,9 +538,42 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         { title: '达人', dataIndex: 'influencer_name', key: 'influencer_name', width: 140 },
         { title: '日期周期', key: 'date_range', width: 210, render: (_, record) => `${record.date_start} 至 ${record.date_end}` },
         { title: '机票类型', dataIndex: 'cabin_type', key: 'cabin_type', width: 110, render: (value) => value === 'business' ? '商务舱' : '经济舱' },
-        { title: '机票费用', dataIndex: 'flight_cost', key: 'flight_cost', width: 120, render: (value, record) => formatMoney(value, record.currency) },
-        { title: '酒店费用', dataIndex: 'hotel_cost', key: 'hotel_cost', width: 120, render: (value, record) => formatMoney(value, record.currency) },
-        { title: '商务车费用', dataIndex: 'business_car_cost', key: 'business_car_cost', width: 120, render: (value, record) => formatMoney(value, record.currency) },
+        {
+          title: '机票费用',
+          dataIndex: 'flight_cost',
+          key: 'flight_cost',
+          width: 140,
+          render: (value, record) => (
+            <Space size={4}>
+              <span>{formatMoney(value, record.currency)}</span>
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openTravelCostEditModal(record)} />
+            </Space>
+          ),
+        },
+        {
+          title: '酒店费用',
+          dataIndex: 'hotel_cost',
+          key: 'hotel_cost',
+          width: 140,
+          render: (value, record) => (
+            <Space size={4}>
+              <span>{formatMoney(value, record.currency)}</span>
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openTravelCostEditModal(record)} />
+            </Space>
+          ),
+        },
+        {
+          title: '商务车费用',
+          dataIndex: 'business_car_cost',
+          key: 'business_car_cost',
+          width: 150,
+          render: (value, record) => (
+            <Space size={4}>
+              <span>{formatMoney(value, record.currency)}</span>
+              <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openTravelCostEditModal(record)} />
+            </Space>
+          ),
+        },
         { title: '接待打车', dataIndex: 'taxi_reception_cost', key: 'taxi_reception_cost', width: 120, render: (value, record) => formatMoney(value, record.currency) },
         { title: '接待吃喝', dataIndex: 'meal_reception_cost', key: 'meal_reception_cost', width: 120, render: (value, record) => formatMoney(value, record.currency) },
         { title: '内部团队差旅费用（机票+酒店）', dataIndex: 'internal_team_travel_cost', key: 'internal_team_travel_cost', width: 220, render: (value, record) => formatMoney(value, record.currency) },
@@ -819,6 +890,27 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           { key: 'calendar', label: '品牌应收机酒', children: renderReceivableCalendar() },
         ]}
       />
+      <Modal
+        title="修改行程成本金额"
+        open={Boolean(editingTravelCostRecord)}
+        onOk={saveTravelCostAmounts}
+        onCancel={() => {
+          setEditingTravelCostRecord(null);
+          travelCostEditForm.resetFields();
+        }}
+      >
+        <Form form={travelCostEditForm} layout="vertical">
+          <Form.Item name="flight_cost" label="机票费用">
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={editingTravelCostRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+          </Form.Item>
+          <Form.Item name="hotel_cost" label="酒店费用">
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={editingTravelCostRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+          </Form.Item>
+          <Form.Item name="business_car_cost" label="商务车费用">
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={editingTravelCostRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+          </Form.Item>
+        </Form>
+      </Modal>
       <Modal title="新增费用" open={Boolean(receptionRecord)} onOk={saveReceptionCosts} onCancel={() => setReceptionRecord(null)}>
         <Form form={receptionForm} layout="vertical">
           <Form.Item name="taxi_reception_cost" label="接待费用（日常打车)">
