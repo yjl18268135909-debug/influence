@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
-import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { liveSessionApi } from '../api';
@@ -18,6 +18,7 @@ const initialTransactions = [
 const TRAVEL_COST_RECORDS_STORAGE_KEY = 'shopfluence_travel_cost_records';
 const TRAVEL_COST_DRAFT_STORAGE_KEY = 'shopfluence_travel_cost_draft';
 const TRAVEL_RECEIVED_STATUS_STORAGE_KEY = 'shopfluence_travel_received_status';
+const TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY = 'shopfluence_travel_receivable_records';
 const DEFAULT_TRAVEL_COST_FORM_VALUES = { currency: 'SGD', exchange_rate: 5.35, cabin_type: 'economy' };
 
 const readStorage = <T,>(key: string, fallback: T): T => {
@@ -61,6 +62,7 @@ interface FinanceManagementProps {
 const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = false }) => {
   const [transactions, setTransactions] = useState(initialTransactions);
   const [travelCostRecords, setTravelCostRecords] = useState<any[]>(() => readStorage(TRAVEL_COST_RECORDS_STORAGE_KEY, []));
+  const [travelReceivableRecords, setTravelReceivableRecords] = useState<any[]>(() => readStorage(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY, []));
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [open, setOpen] = useState(false);
@@ -74,6 +76,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [form] = Form.useForm();
   const [travelCostForm] = Form.useForm();
   const [travelCostEditForm] = Form.useForm();
+  const [travelReceivableForm] = Form.useForm();
   const [receptionForm] = Form.useForm();
   const [receivableAmountForm] = Form.useForm();
   const watchedTravelValues = Form.useWatch([], travelCostForm);
@@ -87,6 +90,10 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   useEffect(() => {
     localStorage.setItem(TRAVEL_COST_RECORDS_STORAGE_KEY, JSON.stringify(travelCostRecords));
   }, [travelCostRecords]);
+
+  useEffect(() => {
+    localStorage.setItem(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY, JSON.stringify(travelReceivableRecords));
+  }, [travelReceivableRecords]);
 
   useEffect(() => {
     localStorage.setItem(TRAVEL_RECEIVED_STATUS_STORAGE_KEY, JSON.stringify(receivedStatus));
@@ -219,6 +226,18 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       unreceivedTotal: receivableTotal - receivedTotal,
     };
   }, [filteredSessions, filteredTravelCostRecords, receivedStatus]);
+
+  const travelReceivableStats = useMemo(() => {
+    const influencerTotal = travelReceivableRecords.reduce((sum, item) => sum + Number(item.influencer_receivable || 0), 0);
+    const brandTotal = travelReceivableRecords.reduce((sum, item) => sum + Number(item.brand_receivable || 0), 0);
+    const otherTotal = travelReceivableRecords.reduce((sum, item) => sum + Number(item.other_receivable || 0), 0);
+    return {
+      influencerTotal,
+      brandTotal,
+      otherTotal,
+      total: influencerTotal + brandTotal + otherTotal,
+    };
+  }, [travelReceivableRecords]);
 
   const resetTravelFilters = () => {
     setTravelFilters({ month: dayjs() });
@@ -457,6 +476,28 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       console.error('更新实际应收机酒费用失败:', error);
       message.error('更新失败');
     }
+  };
+
+  const addTravelReceivableRecord = async () => {
+    const values = await travelReceivableForm.validateFields();
+    const record = {
+      id: `TR${Date.now()}`,
+      created_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      receivable_date: values.receivable_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
+      influencer_receivable: Number(values.influencer_receivable || 0),
+      brand_receivable: Number(values.brand_receivable || 0),
+      other_receivable: Number(values.other_receivable || 0),
+      notes: values.notes || '',
+    };
+    setTravelReceivableRecords((prev) => [record, ...prev]);
+    travelReceivableForm.resetFields();
+    travelReceivableForm.setFieldsValue({ receivable_date: dayjs() });
+    message.success('应收款项已录入');
+  };
+
+  const deleteTravelReceivableRecord = (id: string) => {
+    setTravelReceivableRecords((prev) => prev.filter((item) => item.id !== id));
+    message.success('应收款项记录已删除');
   };
 
   const renderEntryView = () => (
@@ -773,6 +814,92 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     </>
   );
 
+  const renderReceivableEntryView = () => (
+    <>
+      <Form
+        form={travelReceivableForm}
+        layout="vertical"
+        initialValues={{ receivable_date: dayjs() }}
+      >
+        <Row gutter={16}>
+          <Col xs={24} md={6}>
+            <Form.Item name="receivable_date" label="录入日期">
+              <DatePicker style={{ width: '100%' }} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={6}>
+            <Form.Item name="influencer_receivable" label="应收达人款项">
+              <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={6}>
+            <Form.Item name="brand_receivable" label="应收品牌款项">
+              <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+            </Form.Item>
+          </Col>
+          <Col xs={24} md={6}>
+            <Form.Item name="other_receivable" label="应收其他款项">
+              <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+            </Form.Item>
+          </Col>
+          <Col xs={24}>
+            <Form.Item name="notes" label="款项备注" rules={[{ required: true, message: '请填写款项备注' }]}>
+              <Input.TextArea rows={3} placeholder="填写应收款项来源、对应达人/品牌、周期或其他说明" />
+            </Form.Item>
+          </Col>
+        </Row>
+        <Space style={{ marginBottom: 16 }}>
+          <Button type="primary" onClick={addTravelReceivableRecord}>确定录入</Button>
+        </Space>
+      </Form>
+
+      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
+        <Col xs={24} sm={12} lg={6}>
+          <Statistic title="应收达人款项" value={travelReceivableStats.influencerTotal} precision={2} prefix="SGD" />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Statistic title="应收品牌款项" value={travelReceivableStats.brandTotal} precision={2} prefix="SGD" />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Statistic title="应收其他款项" value={travelReceivableStats.otherTotal} precision={2} prefix="SGD" />
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Statistic title="应收合计" value={travelReceivableStats.total} precision={2} prefix="SGD" />
+        </Col>
+      </Row>
+
+      <Table
+        dataSource={travelReceivableRecords}
+        rowKey="id"
+        pagination={{ pageSize: 10 }}
+        locale={{ emptyText: '暂无应收款项记录' }}
+        columns={[
+          { title: '录入时间', dataIndex: 'created_at', key: 'created_at', width: 170 },
+          { title: '录入日期', dataIndex: 'receivable_date', key: 'receivable_date', width: 120 },
+          { title: '应收达人款项', dataIndex: 'influencer_receivable', key: 'influencer_receivable', width: 140, render: (value) => formatMoney(value) },
+          { title: '应收品牌款项', dataIndex: 'brand_receivable', key: 'brand_receivable', width: 140, render: (value) => formatMoney(value) },
+          { title: '应收其他款项', dataIndex: 'other_receivable', key: 'other_receivable', width: 140, render: (value) => formatMoney(value) },
+          {
+            title: '款项备注',
+            dataIndex: 'notes',
+            key: 'notes',
+            render: (value) => value || '-',
+          },
+          {
+            title: '操作',
+            key: 'action',
+            width: 100,
+            render: (_, record) => (
+              <Popconfirm title="确定删除这条应收款项记录吗？" onConfirm={() => deleteTravelReceivableRecord(record.id)}>
+                <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+              </Popconfirm>
+            ),
+          },
+        ]}
+      />
+    </>
+  );
+
   const renderTravelFilters = () => (
     <>
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -888,6 +1015,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           { key: 'costs', label: '达人行程成本', children: renderCostView() },
           { key: 'allocation', label: '达人机酒均摊', children: renderAllocationView() },
           { key: 'calendar', label: '品牌应收机酒', children: renderReceivableCalendar() },
+          { key: 'receivables', label: '应收款项', children: renderReceivableEntryView() },
         ]}
       />
       <Modal
