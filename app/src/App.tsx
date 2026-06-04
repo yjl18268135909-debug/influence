@@ -44,6 +44,7 @@ const menuItems: MenuItem[] = [
   { key: '/schedule-communication', icon: <MessageOutlined />, label: '达人排期沟通' },
   { key: '/live-sessions', icon: <CalendarOutlined />, label: '直播场次管理' },
   { key: '/travel-costs', icon: <WalletOutlined />, label: '达人机酒管理', financeOnly: true },
+  { key: '/travel-receivables', icon: <WalletOutlined />, label: '应收款项', financeOnly: true },
   { key: '/influencers', icon: <UserOutlined />, label: '达人管理' },
   { key: '/merchants', icon: <ShopOutlined />, label: '商家管理' },
   { key: '/employees', icon: <TeamOutlined />, label: '员工管理' },
@@ -138,7 +139,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
     return true;
   });
   const defaultRoute = visibleMenuItems[0]?.key || '/schedule-communication';
-  const restrictedFinanceRoutes = ['/finance', '/travel-costs'];
+  const restrictedFinanceRoutes = ['/finance', '/travel-costs', '/travel-receivables'];
   const ownerOnlyRoutes = ['/settings'];
 
   const {
@@ -262,6 +263,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
               <Route path="/merchants/:id/introduction" element={<MerchantIntroduction />} />
               <Route path="/live-sessions" element={<LiveSessions key="live-sessions" />} />
               <Route path="/travel-costs" element={canViewFinance(currentUser) ? <FinanceManagement travelOnly /> : <Navigate to={defaultRoute} replace />} />
+              <Route path="/travel-receivables" element={canViewFinance(currentUser) ? <FinanceManagement receivablesOnly /> : <Navigate to={defaultRoute} replace />} />
               <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />
               <Route path="/employees" element={<EmployeeManagement />} />
               <Route path="/finance" element={canViewFinance(currentUser) ? <FinanceManagement /> : <Navigate to={defaultRoute} replace />} />

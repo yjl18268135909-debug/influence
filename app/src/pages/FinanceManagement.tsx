@@ -64,9 +64,10 @@ const deserializeTravelCostDraft = (values: any) => ({
 
 interface FinanceManagementProps {
   travelOnly?: boolean;
+  receivablesOnly?: boolean;
 }
 
-const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = false }) => {
+const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = false, receivablesOnly = false }) => {
   const [transactions, setTransactions] = useState(initialTransactions);
   const [travelCostRecords, setTravelCostRecords] = useState<any[]>(() => readStorage(TRAVEL_COST_RECORDS_STORAGE_KEY, []));
   const [travelReceivableRecords, setTravelReceivableRecords] = useState<any[]>(() => readStorage(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY, []));
@@ -958,6 +959,53 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     </>
   );
 
+  const renderTravelReceivableModal = () => (
+    <Modal
+      title="新增应收款项"
+      open={receivableModalOpen}
+      onOk={addTravelReceivableRecord}
+      onCancel={() => {
+        setReceivableModalOpen(false);
+        travelReceivableForm.resetFields();
+      }}
+      okText="保存"
+      cancelText="取消"
+      width={720}
+    >
+      <Form
+        form={travelReceivableForm}
+        layout="vertical"
+        initialValues={{ receivable_date: dayjs(), receivable_type: 'brand' }}
+      >
+        <Form.Item name="receivable_date" label="录入日期">
+          <DatePicker style={{ width: '100%' }} />
+        </Form.Item>
+        <Form.Item name="receivable_type" label="款项类型" rules={[{ required: true, message: '请选择款项类型' }]}>
+          <Select placeholder="请选择应收款项类型">
+            {TRAVEL_RECEIVABLE_TYPE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="reason" label="款项原因" rules={[{ required: true, message: '请选择或新增款项原因' }]}>
+          <Select
+            mode="tags"
+            placeholder="选择或输入新的款项原因"
+            maxCount={1}
+            tokenSeparators={[',', '，']}
+            optionFilterProp="children"
+          >
+            {travelReceivableReasonOptions.map((reason) => <Option key={reason} value={reason}>{reason}</Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请填写金额' }]}>
+          <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+        </Form.Item>
+        <Form.Item name="notes" label="款项备注">
+          <Input.TextArea rows={3} placeholder="填写应收款项来源、对应达人/品牌、周期或其他说明" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+
   const renderTravelFilters = () => (
     <>
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -1073,7 +1121,6 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           { key: 'costs', label: '达人行程成本', children: renderCostView() },
           { key: 'allocation', label: '达人机酒均摊', children: renderAllocationView() },
           { key: 'calendar', label: '品牌应收机酒', children: renderReceivableCalendar() },
-          { key: 'receivables', label: '应收款项', children: renderReceivableEntryView() },
         ]}
       />
       <Modal
@@ -1110,50 +1157,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           </Form.Item>
         </Form>
       </Modal>
-      <Modal
-        title="新增应收款项"
-        open={receivableModalOpen}
-        onOk={addTravelReceivableRecord}
-        onCancel={() => {
-          setReceivableModalOpen(false);
-          travelReceivableForm.resetFields();
-        }}
-        okText="保存"
-        cancelText="取消"
-        width={720}
-      >
-        <Form
-          form={travelReceivableForm}
-          layout="vertical"
-          initialValues={{ receivable_date: dayjs(), receivable_type: 'brand' }}
-        >
-          <Form.Item name="receivable_date" label="录入日期">
-            <DatePicker style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="receivable_type" label="款项类型" rules={[{ required: true, message: '请选择款项类型' }]}>
-            <Select placeholder="请选择应收款项类型">
-              {TRAVEL_RECEIVABLE_TYPE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}
-            </Select>
-          </Form.Item>
-          <Form.Item name="reason" label="款项原因" rules={[{ required: true, message: '请选择或新增款项原因' }]}>
-            <Select
-              mode="tags"
-              placeholder="选择或输入新的款项原因"
-              maxCount={1}
-              tokenSeparators={[',', '，']}
-              optionFilterProp="children"
-            >
-              {travelReceivableReasonOptions.map((reason) => <Option key={reason} value={reason}>{reason}</Option>)}
-            </Select>
-          </Form.Item>
-          <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请填写金额' }]}>
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
-          </Form.Item>
-          <Form.Item name="notes" label="款项备注">
-            <Input.TextArea rows={3} placeholder="填写应收款项来源、对应达人/品牌、周期或其他说明" />
-          </Form.Item>
-        </Form>
-      </Modal>
+      {renderTravelReceivableModal()}
       <Modal
         title="修改实际应收机酒费用"
         open={Boolean(editingReceivableSession)}
@@ -1174,6 +1178,16 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
   if (travelOnly) {
     return renderTravelCostView();
+  }
+
+  if (receivablesOnly) {
+    return (
+      <>
+        <h2 style={{ margin: '0 0 16px' }}>应收款项</h2>
+        {renderReceivableEntryView()}
+        {renderTravelReceivableModal()}
+      </>
+    );
   }
 
   return (
