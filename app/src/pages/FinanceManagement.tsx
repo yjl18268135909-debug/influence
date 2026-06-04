@@ -66,6 +66,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [open, setOpen] = useState(false);
+  const [receivableModalOpen, setReceivableModalOpen] = useState(false);
   const [receptionRecord, setReceptionRecord] = useState<any | null>(null);
   const [editingTravelCostRecord, setEditingTravelCostRecord] = useState<any | null>(null);
   const [editingReceivableSession, setEditingReceivableSession] = useState<any | null>(null);
@@ -492,7 +493,8 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     setTravelReceivableRecords((prev) => [record, ...prev]);
     travelReceivableForm.resetFields();
     travelReceivableForm.setFieldsValue({ receivable_date: dayjs() });
-    message.success('应收款项已录入');
+    setReceivableModalOpen(false);
+    message.success('应收款项已新增');
   };
 
   const deleteTravelReceivableRecord = (id: string) => {
@@ -816,42 +818,19 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
   const renderReceivableEntryView = () => (
     <>
-      <Form
-        form={travelReceivableForm}
-        layout="vertical"
-        initialValues={{ receivable_date: dayjs() }}
-      >
-        <Row gutter={16}>
-          <Col xs={24} md={6}>
-            <Form.Item name="receivable_date" label="录入日期">
-              <DatePicker style={{ width: '100%' }} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={6}>
-            <Form.Item name="influencer_receivable" label="应收达人款项">
-              <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={6}>
-            <Form.Item name="brand_receivable" label="应收品牌款项">
-              <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={6}>
-            <Form.Item name="other_receivable" label="应收其他款项">
-              <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
-            </Form.Item>
-          </Col>
-          <Col xs={24}>
-            <Form.Item name="notes" label="款项备注" rules={[{ required: true, message: '请填写款项备注' }]}>
-              <Input.TextArea rows={3} placeholder="填写应收款项来源、对应达人/品牌、周期或其他说明" />
-            </Form.Item>
-          </Col>
-        </Row>
-        <Space style={{ marginBottom: 16 }}>
-          <Button type="primary" onClick={addTravelReceivableRecord}>确定录入</Button>
-        </Space>
-      </Form>
+      <Space style={{ marginBottom: 16 }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            travelReceivableForm.resetFields();
+            travelReceivableForm.setFieldsValue({ receivable_date: dayjs() });
+            setReceivableModalOpen(true);
+          }}
+        >
+          新增应收款项
+        </Button>
+      </Space>
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} lg={6}>
@@ -1049,6 +1028,40 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           </Form.Item>
           <Form.Item name="internal_team_travel_cost" label="内部团队差旅费用（机票+酒店）">
             <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={receptionRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+          </Form.Item>
+        </Form>
+      </Modal>
+      <Modal
+        title="新增应收款项"
+        open={receivableModalOpen}
+        onOk={addTravelReceivableRecord}
+        onCancel={() => {
+          setReceivableModalOpen(false);
+          travelReceivableForm.resetFields();
+        }}
+        okText="保存"
+        cancelText="取消"
+        width={720}
+      >
+        <Form
+          form={travelReceivableForm}
+          layout="vertical"
+          initialValues={{ receivable_date: dayjs() }}
+        >
+          <Form.Item name="receivable_date" label="录入日期">
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="influencer_receivable" label="应收达人款项">
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+          </Form.Item>
+          <Form.Item name="brand_receivable" label="应收品牌款项">
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+          </Form.Item>
+          <Form.Item name="other_receivable" label="应收其他款项">
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+          </Form.Item>
+          <Form.Item name="notes" label="款项备注" rules={[{ required: true, message: '请填写款项备注' }]}>
+            <Input.TextArea rows={3} placeholder="填写应收款项来源、对应达人/品牌、周期或其他说明" />
           </Form.Item>
         </Form>
       </Modal>
