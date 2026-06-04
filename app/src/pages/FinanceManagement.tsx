@@ -243,26 +243,32 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     };
   }, [filteredSessions, filteredTravelCostRecords, receivedStatus]);
 
-  const travelReceivableStats = useMemo(() => {
-    const influencerTotal = travelReceivableRecords.reduce((sum, item) => {
+  const travelHotelReceivableStats = useMemo(() => {
+    const isTravelHotelReason = (item: any) => String(item.reason || '').includes('机酒');
+    const manualTravelHotelRecords = travelReceivableRecords.filter(isTravelHotelReason);
+    const influencerTotal = manualTravelHotelRecords.reduce((sum, item) => {
       if (item.receivable_type) return sum + (item.receivable_type === 'influencer' ? Number(item.amount || 0) : 0);
       return sum + Number(item.influencer_receivable || 0);
     }, 0);
-    const brandTotal = travelReceivableRecords.reduce((sum, item) => {
+    const manualBrandTotal = manualTravelHotelRecords.reduce((sum, item) => {
       if (item.receivable_type) return sum + (item.receivable_type === 'brand' ? Number(item.amount || 0) : 0);
       return sum + Number(item.brand_receivable || 0);
     }, 0);
-    const otherTotal = travelReceivableRecords.reduce((sum, item) => {
+    const sessionBrandTotal = sessions
+      .filter((item) => item.schedule_type !== 'travel_note')
+      .reduce((sum, item) => sum + Number(item.brand_receivable || 0), 0);
+    const otherTotal = manualTravelHotelRecords.reduce((sum, item) => {
       if (item.receivable_type) return sum + (item.receivable_type === 'other' ? Number(item.amount || 0) : 0);
       return sum + Number(item.other_receivable || 0);
     }, 0);
+    const brandTotal = manualBrandTotal + sessionBrandTotal;
     return {
       influencerTotal,
       brandTotal,
       otherTotal,
       total: influencerTotal + brandTotal + otherTotal,
     };
-  }, [travelReceivableRecords]);
+  }, [travelReceivableRecords, sessions]);
 
   const resetTravelFilters = () => {
     setTravelFilters({ month: dayjs() });
@@ -981,21 +987,6 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         </Button>
       </Space>
 
-      <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={12} lg={6}>
-          <Statistic title="应收达人款项" value={travelReceivableStats.influencerTotal} precision={2} prefix="SGD" />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Statistic title="应收品牌款项" value={travelReceivableStats.brandTotal} precision={2} prefix="SGD" />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Statistic title="应收其他款项" value={travelReceivableStats.otherTotal} precision={2} prefix="SGD" />
-        </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Statistic title="应收合计" value={travelReceivableStats.total} precision={2} prefix="SGD" />
-        </Col>
-      </Row>
-
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} lg={6}>
           <Select
@@ -1143,6 +1134,23 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         { key: 'influencer-summary', label: '按达人汇总', children: renderInfluencerReceivableSummaryView() },
       ]}
     />
+  );
+
+  const renderTravelHotelReceivableStats = () => (
+    <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Col xs={24} sm={12} lg={6}>
+        <Statistic title="机酒应收达人款项" value={travelHotelReceivableStats.influencerTotal} precision={2} prefix="SGD" />
+      </Col>
+      <Col xs={24} sm={12} lg={6}>
+        <Statistic title="机酒应收品牌款项" value={travelHotelReceivableStats.brandTotal} precision={2} prefix="SGD" />
+      </Col>
+      <Col xs={24} sm={12} lg={6}>
+        <Statistic title="机酒应收其他款项" value={travelHotelReceivableStats.otherTotal} precision={2} prefix="SGD" />
+      </Col>
+      <Col xs={24} sm={12} lg={6}>
+        <Statistic title="机酒应收合计" value={travelHotelReceivableStats.total} precision={2} prefix="SGD" />
+      </Col>
+    </Row>
   );
 
   const renderTravelReceivableModal = () => (
@@ -1392,6 +1400,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     return (
       <>
         <h2 style={{ margin: '0 0 16px' }}>应收款项</h2>
+        {renderTravelHotelReceivableStats()}
         {renderReceivableManagementView()}
         {renderTravelReceivableModal()}
       </>
