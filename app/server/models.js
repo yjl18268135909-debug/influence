@@ -68,6 +68,36 @@ function deleteAccount(id) {
   return { success: true };
 }
 
+function exportAllData() {
+  const tables = [
+    'influencers',
+    'merchants',
+    'products',
+    'live_sessions',
+    'orders',
+    'expenses',
+    'costs',
+    'income',
+  ];
+
+  const data = tables.reduce((result, table) => {
+    result[table] = db.prepare(`SELECT * FROM ${table}`).all();
+    return result;
+  }, {});
+
+  data.app_accounts = db.prepare(`
+    SELECT id, username, name, role, status, created_at, updated_at
+    FROM app_accounts
+    ORDER BY id ASC
+  `).all();
+
+  return {
+    exported_at: new Date().toISOString(),
+    database: 'sqlite',
+    data,
+  };
+}
+
 // ==================== 达人相关操作 ====================
 
 // 获取所有达人
@@ -908,6 +938,7 @@ module.exports = {
   createAccount,
   updateAccount,
   deleteAccount,
+  exportAllData,
   // 达人
   getInfluencers,
   createInfluencer,

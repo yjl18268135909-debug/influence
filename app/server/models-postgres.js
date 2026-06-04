@@ -111,6 +111,36 @@ async function deleteAccount(id) {
   return { success: true };
 }
 
+async function exportAllData() {
+  await ensureAccountsTable();
+  const tables = [
+    'influencers',
+    'merchants',
+    'products',
+    'live_sessions',
+    'orders',
+    'expenses',
+    'costs',
+    'income',
+  ];
+
+  const data = {};
+  for (const table of tables) {
+    data[table] = await query(`SELECT * FROM ${table}`);
+  }
+  data.app_accounts = await query(`
+    SELECT id, username, name, role, status, created_at, updated_at
+    FROM app_accounts
+    ORDER BY id ASC
+  `);
+
+  return {
+    exported_at: new Date().toISOString(),
+    database: 'postgres',
+    data,
+  };
+}
+
 async function getInfluencers(filters = {}) {
   const where = ["account NOT LIKE 'placeholder_%'", "account NOT LIKE 'live_%'"];
   const params = [];
@@ -751,6 +781,7 @@ module.exports = {
   createAccount,
   updateAccount,
   deleteAccount,
+  exportAllData,
   getInfluencers,
   createInfluencer,
   updateInfluencer,

@@ -49,7 +49,7 @@ const requireOwner = (req, res, next) => {
   res.status(403).json({ success: false, error: '只有老板账号可以管理账号权限' });
 };
 
-app.use('/api/accounts', requireOwner);
+app.use(['/api/accounts', '/api/export'], requireOwner);
 app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
 
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
@@ -99,6 +99,14 @@ app.put('/api/accounts/:id', asyncRoute(async (req, res) => {
 app.delete('/api/accounts/:id', asyncRoute(async (req, res) => {
   await models.deleteAccount(parseInt(req.params.id, 10));
   res.json({ success: true });
+}));
+
+app.get('/api/export/all', asyncRoute(async (req, res) => {
+  const data = await models.exportAllData();
+  const filename = `shopfluence-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.json(data);
 }));
 
 app.get('/api/influencers', asyncRoute(async (req, res) => {

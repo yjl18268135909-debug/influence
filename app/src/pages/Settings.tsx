@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
-import { accountApi } from '../api';
+import { accountApi, backupApi } from '../api';
 
 const { Title, Text } = Typography;
 
@@ -36,6 +36,7 @@ const Settings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
+  const [exporting, setExporting] = useState(false);
   const [form] = Form.useForm();
 
   const loadAccounts = async () => {
@@ -97,6 +98,29 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleExportAllData = async () => {
+    setExporting(true);
+    try {
+      const response = await backupApi.exportAll();
+      const date = new Date().toISOString().slice(0, 10);
+      const blob = new Blob([response.data], { type: 'application/json;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `shopfluence-backup-${date}.json`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      message.success('数据备份已下载到本地');
+    } catch (error: any) {
+      console.error(error);
+      message.error(error.response?.data?.error || '导出备份失败');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const columns: ColumnsType<Account> = [
     {
       title: '账号',
@@ -147,6 +171,18 @@ const Settings: React.FC = () => {
       <div>
         <Title level={2} style={{ marginBottom: 8 }}>设置</Title>
         <Text type="secondary">账号配置、权限调整和登录状态管理</Text>
+      </div>
+
+      <div style={{ border: '1px solid #f0f0f0', borderRadius: 8, padding: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div>
+            <Title level={4} style={{ margin: 0 }}>数据备份</Title>
+            <Text type="secondary">导出全部业务数据并保存到电脑本地</Text>
+          </div>
+          <Button icon={<DownloadOutlined />} loading={exporting} onClick={handleExportAllData}>
+            导出全部数据
+          </Button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

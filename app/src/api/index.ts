@@ -49,6 +49,10 @@ export const accountApi = {
   delete: (id: number | string) => api.delete(`/accounts/${id}`),
 };
 
+export const backupApi = {
+  exportAll: () => api.get('/export/all', { responseType: 'blob' }),
+};
+
 // 达人相关API
 export const influencerApi = {
   getAll: (params?: any) => api.get('/influencers', { params }),
