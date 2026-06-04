@@ -544,17 +544,22 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     [travelReceivableRecords, receivableReasonFilter],
   );
 
-  const getReceivableAmount = (record: any) => (
-    record.receivable_type ? Number(record.amount || 0) : getLegacyReceivableAmount(record)
-  );
-
-  const getReceivableObjectName = (record: any) => record.object_name || '-';
-
   const getLegacyReceivableAmount = (record: any) => (
     Number(record.influencer_receivable || 0)
     + Number(record.brand_receivable || 0)
     + Number(record.other_receivable || 0)
   );
+
+  const getReceivableAmount = (record: any) => (
+    record.receivable_type ? Number(record.amount || 0) : getLegacyReceivableAmount(record)
+  );
+
+  const receivableReasonFilterTotal = useMemo(
+    () => filteredTravelReceivableRecords.reduce((sum, item) => sum + getReceivableAmount(item), 0),
+    [filteredTravelReceivableRecords],
+  );
+
+  const getReceivableObjectName = (record: any) => record.object_name || '-';
 
   const getLegacyReceivableTypeText = (record: any) => {
     const types = [];
@@ -1003,6 +1008,14 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         </Col>
         <Col xs={24} sm={12} lg={4}>
           <Button onClick={() => setReceivableReasonFilter(undefined)}>清除原因筛选</Button>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Statistic
+            title={receivableReasonFilter ? `${receivableReasonFilter}总计` : '当前列表总计'}
+            value={receivableReasonFilterTotal}
+            precision={2}
+            prefix="SGD"
+          />
         </Col>
       </Row>
 
