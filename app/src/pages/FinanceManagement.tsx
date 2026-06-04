@@ -82,6 +82,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [receivableModalOpen, setReceivableModalOpen] = useState(false);
   const [receptionRecord, setReceptionRecord] = useState<any | null>(null);
   const [editingTravelCostRecord, setEditingTravelCostRecord] = useState<any | null>(null);
+  const [editingTravelReceivableRecord, setEditingTravelReceivableRecord] = useState<any | null>(null);
   const [editingReceivableSession, setEditingReceivableSession] = useState<any | null>(null);
   const [receivedStatus, setReceivedStatus] = useState<Record<string, boolean>>(() => readStorage(TRAVEL_RECEIVED_STATUS_STORAGE_KEY, {}));
   const [calendarMonth, setCalendarMonth] = useState<Dayjs>(dayjs());
@@ -509,12 +510,12 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     }
   };
 
-  const addTravelReceivableRecord = async () => {
+  const saveTravelReceivableRecord = async () => {
     const values = await travelReceivableForm.validateFields();
     const reason = Array.isArray(values.reason) ? values.reason[0] : values.reason;
     const record = {
-      id: `TR${Date.now()}`,
-      created_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
+      id: editingTravelReceivableRecord?.id || `TR${Date.now()}`,
+      created_at: editingTravelReceivableRecord?.created_at || dayjs().format('YYYY-MM-DD HH:mm:ss'),
       receivable_date: values.receivable_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
       receivable_type: values.receivable_type,
       object_name: values.object_name,
@@ -522,11 +523,31 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       amount: Number(values.amount || 0),
       notes: values.notes || '',
     };
-    setTravelReceivableRecords((prev) => [record, ...prev]);
+    setTravelReceivableRecords((prev) => (
+      editingTravelReceivableRecord
+        ? prev.map((item) => item.id === editingTravelReceivableRecord.id ? record : item)
+        : [record, ...prev]
+    ));
     travelReceivableForm.resetFields();
     travelReceivableForm.setFieldsValue({ receivable_date: dayjs(), receivable_type: 'brand' });
+    setEditingTravelReceivableRecord(null);
     setReceivableModalOpen(false);
-    message.success('应收款项已新增');
+    message.success(editingTravelReceivableRecord ? '应收款项已更新' : '应收款项已新增');
+  };
+
+  const openTravelReceivableEditModal = (record: any) => {
+    const receivableType = record.receivable_type
+      || (Number(record.influencer_receivable || 0) > 0 ? 'influencer' : Number(record.other_receivable || 0) > 0 ? 'other' : 'brand');
+    setEditingTravelReceivableRecord(record);
+    travelReceivableForm.setFieldsValue({
+      receivable_date: record.receivable_date ? dayjs(record.receivable_date) : dayjs(),
+      receivable_type: receivableType,
+      object_name: record.object_name,
+      reason: record.reason ? [record.reason] : undefined,
+      amount: getReceivableAmount(record),
+      notes: record.notes || '',
+    });
+    setReceivableModalOpen(true);
   };
 
   const deleteTravelReceivableRecord = (id: string) => {
@@ -983,6 +1004,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           type="primary"
           icon={<PlusOutlined />}
           onClick={() => {
+            setEditingTravelReceivableRecord(null);
             travelReceivableForm.resetFields();
             travelReceivableForm.setFieldsValue({ receivable_date: dayjs(), receivable_type: 'brand' });
             setReceivableModalOpen(true);
@@ -1064,11 +1086,14 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           {
             title: '操作',
             key: 'action',
-            width: 100,
+            width: 170,
             render: (_, record) => (
-              <Popconfirm title="确定删除这条应收款项记录吗？" onConfirm={() => deleteTravelReceivableRecord(record.id)}>
-                <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
-              </Popconfirm>
+              <Space>
+                <Button type="link" icon={<EditOutlined />} onClick={() => openTravelReceivableEditModal(record)}>修改</Button>
+                <Popconfirm title="确定删除这条应收款项记录吗？" onConfirm={() => deleteTravelReceivableRecord(record.id)}>
+                  <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+                </Popconfirm>
+              </Space>
             ),
           },
         ]}
@@ -1168,11 +1193,12 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
   const renderTravelReceivableModal = () => (
     <Modal
-      title="新增应收款项"
+      title={editingTravelReceivableRecord ? '修改应收款项' : '新增应收款项'}
       open={receivableModalOpen}
-      onOk={addTravelReceivableRecord}
+      onOk={saveTravelReceivableRecord}
       onCancel={() => {
         setReceivableModalOpen(false);
+        setEditingTravelReceivableRecord(null);
         travelReceivableForm.resetFields();
       }}
       okText="保存"
