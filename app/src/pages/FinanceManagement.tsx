@@ -27,6 +27,11 @@ const TRAVEL_RECEIVABLE_TYPE_OPTIONS = [
 ];
 const DEFAULT_TRAVEL_RECEIVABLE_REASON_OPTIONS = ['机酒费用', '接待费用', '补差价', '退款', '其他'];
 const travelReceivableTypeLabel = (value: string) => TRAVEL_RECEIVABLE_TYPE_OPTIONS.find((item) => item.value === value)?.label || '-';
+const receivableObjectLabel: Record<string, string> = {
+  influencer: '达人名称',
+  brand: '品牌名称',
+  other: '应收对象',
+};
 
 const readStorage = <T,>(key: string, fallback: T): T => {
   try {
@@ -90,6 +95,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [receptionForm] = Form.useForm();
   const [receivableAmountForm] = Form.useForm();
   const watchedTravelValues = Form.useWatch([], travelCostForm);
+  const watchedReceivableType = Form.useWatch('receivable_type', travelReceivableForm);
 
   useEffect(() => {
     fetchSessions();
@@ -505,6 +511,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       created_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
       receivable_date: values.receivable_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
       receivable_type: values.receivable_type,
+      object_name: values.object_name,
       reason,
       amount: Number(values.amount || 0),
       notes: values.notes || '',
@@ -531,6 +538,12 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     [travelReceivableRecords, receivableReasonFilter],
   );
 
+  const getReceivableAmount = (record: any) => (
+    record.receivable_type ? Number(record.amount || 0) : getLegacyReceivableAmount(record)
+  );
+
+  const getReceivableObjectName = (record: any) => record.object_name || '-';
+
   const getLegacyReceivableAmount = (record: any) => (
     Number(record.influencer_receivable || 0)
     + Number(record.brand_receivable || 0)
@@ -544,6 +557,99 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     if (Number(record.other_receivable || 0) > 0) types.push('应收其他');
     return types.join(' / ') || '-';
   };
+
+  const receivableBrandSummaryRows = useMemo(() => {
+    const groups = new Map<string, any>();
+    const addDetail = (brandName: string, detail: any) => {
+      const key = brandName || '未填写品牌';
+      const current = groups.get(key) || { key, object_name: key, total_amount: 0, detail_count: 0, details: [] };
+      current.total_amount += Number(detail.amount || 0);
+      current.detail_count += 1;
+      current.details.push(detail);
+      groups.set(key, current);
+    };
+
+    travelReceivableRecords.forEach((record) => {
+      if (record.receivable_type === 'brand') {
+        addDetail(record.object_name || '未填写品牌', {
+          id: record.id,
+          source: '手动录入',
+          date: record.receivable_date,
+          influencer_name: '-',
+          reason: record.reason || '-',
+          amount: Number(record.amount || 0),
+          notes: record.notes || '-',
+        });
+        return;
+      }
+      if (!record.receivable_type && Number(record.brand_receivable || 0) > 0) {
+        addDetail(record.object_name || '未填写品牌', {
+          id: record.id,
+          source: '旧记录',
+          date: record.receivable_date,
+          influencer_name: '-',
+          reason: record.reason || '-',
+          amount: Number(record.brand_receivable || 0),
+          notes: record.notes || '-',
+        });
+      }
+    });
+
+    sessions
+      .filter((item) => item.schedule_type !== 'travel_note')
+      .filter((item) => Number(item.brand_receivable || 0) > 0)
+      .forEach((item) => {
+        addDetail(sessionBrand(item), {
+          id: `session-${item.id || `${item.session_date}-${item.influencer_name}-${sessionBrand(item)}`}`,
+          source: '应收机酒成本',
+          date: item.session_date,
+          influencer_name: item.influencer_name || '未填写达人',
+          reason: '应收机酒成本',
+          amount: Number(item.brand_receivable || 0),
+          notes: sessionMode(item),
+        });
+      });
+
+    return Array.from(groups.values()).sort((a, b) => b.total_amount - a.total_amount);
+  }, [travelReceivableRecords, sessions]);
+
+  const receivableInfluencerSummaryRows = useMemo(() => {
+    const groups = new Map<string, any>();
+    const addDetail = (influencerName: string, detail: any) => {
+      const key = influencerName || '未填写达人';
+      const current = groups.get(key) || { key, object_name: key, total_amount: 0, detail_count: 0, details: [] };
+      current.total_amount += Number(detail.amount || 0);
+      current.detail_count += 1;
+      current.details.push(detail);
+      groups.set(key, current);
+    };
+
+    travelReceivableRecords.forEach((record) => {
+      if (record.receivable_type === 'influencer') {
+        addDetail(record.object_name || '未填写达人', {
+          id: record.id,
+          source: '手动录入',
+          date: record.receivable_date,
+          reason: record.reason || '-',
+          amount: Number(record.amount || 0),
+          notes: record.notes || '-',
+        });
+        return;
+      }
+      if (!record.receivable_type && Number(record.influencer_receivable || 0) > 0) {
+        addDetail(record.object_name || '未填写达人', {
+          id: record.id,
+          source: '旧记录',
+          date: record.receivable_date,
+          reason: record.reason || '-',
+          amount: Number(record.influencer_receivable || 0),
+          notes: record.notes || '-',
+        });
+      }
+    });
+
+    return Array.from(groups.values()).sort((a, b) => b.total_amount - a.total_amount);
+  }, [travelReceivableRecords]);
 
   const renderEntryView = () => (
     <>
@@ -932,11 +1038,18 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
             render: (value) => value || '-',
           },
           {
+            title: '应收对象',
+            dataIndex: 'object_name',
+            key: 'object_name',
+            width: 160,
+            render: (_, record) => getReceivableObjectName(record),
+          },
+          {
             title: '金额',
             dataIndex: 'amount',
             key: 'amount',
             width: 140,
-            render: (value, record) => formatMoney(record.receivable_type ? value : getLegacyReceivableAmount(record)),
+            render: (_, record) => formatMoney(getReceivableAmount(record)),
           },
           {
             title: '款项备注',
@@ -957,6 +1070,79 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         ]}
       />
     </>
+  );
+
+  const renderBrandReceivableSummaryView = () => (
+    <Table
+      dataSource={receivableBrandSummaryRows}
+      rowKey="key"
+      pagination={{ pageSize: 10 }}
+      locale={{ emptyText: '暂无品牌应收汇总' }}
+      columns={[
+        { title: '品牌名称', dataIndex: 'object_name', key: 'object_name', width: 220 },
+        { title: '应收明细数', dataIndex: 'detail_count', key: 'detail_count', width: 120 },
+        { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatMoney(value) },
+      ]}
+      expandable={{
+        expandedRowRender: (record) => (
+          <Table
+            dataSource={record.details}
+            rowKey="id"
+            pagination={false}
+            size="small"
+            columns={[
+              { title: '来源', dataIndex: 'source', key: 'source', width: 130 },
+              { title: '日期', dataIndex: 'date', key: 'date', width: 120 },
+              { title: '达人', dataIndex: 'influencer_name', key: 'influencer_name', width: 140 },
+              { title: '款项原因', dataIndex: 'reason', key: 'reason', width: 150 },
+              { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatMoney(value) },
+              { title: '备注', dataIndex: 'notes', key: 'notes', render: (value) => value || '-' },
+            ]}
+          />
+        ),
+      }}
+    />
+  );
+
+  const renderInfluencerReceivableSummaryView = () => (
+    <Table
+      dataSource={receivableInfluencerSummaryRows}
+      rowKey="key"
+      pagination={{ pageSize: 10 }}
+      locale={{ emptyText: '暂无达人应收汇总' }}
+      columns={[
+        { title: '达人名称', dataIndex: 'object_name', key: 'object_name', width: 220 },
+        { title: '应收明细数', dataIndex: 'detail_count', key: 'detail_count', width: 120 },
+        { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatMoney(value) },
+      ]}
+      expandable={{
+        expandedRowRender: (record) => (
+          <Table
+            dataSource={record.details}
+            rowKey="id"
+            pagination={false}
+            size="small"
+            columns={[
+              { title: '来源', dataIndex: 'source', key: 'source', width: 130 },
+              { title: '日期', dataIndex: 'date', key: 'date', width: 120 },
+              { title: '款项原因', dataIndex: 'reason', key: 'reason', width: 150 },
+              { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatMoney(value) },
+              { title: '备注', dataIndex: 'notes', key: 'notes', render: (value) => value || '-' },
+            ]}
+          />
+        ),
+      }}
+    />
+  );
+
+  const renderReceivableManagementView = () => (
+    <Tabs
+      items={[
+        { key: 'entry', label: '应收款项录入', children: renderReceivableEntryView() },
+        { key: 'brand-summary', label: '按品牌汇总', children: renderBrandReceivableSummaryView() },
+        { key: 'influencer-summary', label: '按达人汇总', children: renderInfluencerReceivableSummaryView() },
+      ]}
+    />
   );
 
   const renderTravelReceivableModal = () => (
@@ -981,9 +1167,31 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           <DatePicker style={{ width: '100%' }} />
         </Form.Item>
         <Form.Item name="receivable_type" label="款项类型" rules={[{ required: true, message: '请选择款项类型' }]}>
-          <Select placeholder="请选择应收款项类型">
+          <Select
+            placeholder="请选择应收款项类型"
+            onChange={() => travelReceivableForm.setFieldValue('object_name', undefined)}
+          >
             {TRAVEL_RECEIVABLE_TYPE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}
           </Select>
+        </Form.Item>
+        <Form.Item
+          name="object_name"
+          label={receivableObjectLabel[watchedReceivableType || 'brand']}
+          rules={[{ required: true, message: '请选择或填写应收对象' }]}
+        >
+          {watchedReceivableType === 'other' ? (
+            <Input placeholder="请输入应收对象" />
+          ) : (
+            <Select
+              showSearch
+              optionFilterProp="children"
+              placeholder={watchedReceivableType === 'influencer' ? '请选择达人' : '请选择品牌'}
+            >
+              {(watchedReceivableType === 'influencer' ? travelInfluencerOptions : travelBrandOptions).map((name) => (
+                <Option key={name} value={name}>{name}</Option>
+              ))}
+            </Select>
+          )}
         </Form.Item>
         <Form.Item name="reason" label="款项原因" rules={[{ required: true, message: '请选择或新增款项原因' }]}>
           <Select
@@ -1184,7 +1392,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     return (
       <>
         <h2 style={{ margin: '0 0 16px' }}>应收款项</h2>
-        {renderReceivableEntryView()}
+        {renderReceivableManagementView()}
         {renderTravelReceivableModal()}
       </>
     );
