@@ -1177,16 +1177,16 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const renderTravelHotelReceivableStats = () => (
     <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="机酒应收达人款项" value={travelHotelReceivableStats.influencerTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收达人款项" value={travelHotelReceivableStats.influencerTotal} precision={2} prefix="SGD" />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="机酒应收品牌款项" value={travelHotelReceivableStats.brandTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收品牌款项" value={travelHotelReceivableStats.brandTotal} precision={2} prefix="SGD" />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="机酒应收其他款项" value={travelHotelReceivableStats.otherTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收其他款项" value={travelHotelReceivableStats.otherTotal} precision={2} prefix="SGD" />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="机酒应收合计" value={travelHotelReceivableStats.total} precision={2} prefix="SGD" />
+        <Statistic title="应收合计" value={travelHotelReceivableStats.total} precision={2} prefix="SGD" />
       </Col>
     </Row>
   );
