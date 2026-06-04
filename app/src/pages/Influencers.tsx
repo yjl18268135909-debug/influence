@@ -1,11 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, message, Popconfirm, Tag, Card, Statistic, Row, Col } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, UserOutlined, DollarOutlined } from '@ant-design/icons';
+import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, message, Popconfirm, Tag, Card, Statistic, Row, Col, Upload } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, UserOutlined, DollarOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
+import * as XLSX from 'xlsx';
 import { influencerApi, liveSessionApi } from '../api';
 
 const { Option } = Select;
 const { TextArea } = Input;
+
+const influencerImportHeaders = [
+  '平台',
+  '达人名称',
+  '达人账号',
+  '达人佣金',
+  '达人机构',
+  '达人单场数据',
+  '达人选品方向',
+  '联系方式',
+  '达人寄样地址',
+  '其他备注',
+  '状态',
+];
 
 interface Influencer {
   id: number;
@@ -40,6 +55,7 @@ const Influencers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<Influencer | null>(null);
+  const [importing, setImporting] = useState(false);
   const [form] = Form.useForm();
 
   const fetchInfluencers = async () => {
@@ -136,6 +152,101 @@ const Influencers: React.FC = () => {
       console.error('操作失败:', error);
       message.error('操作失败');
     }
+  };
+
+  const parseImportNumber = (value: any, fallback = 0) => {
+    if (value === undefined || value === null || value === '') return fallback;
+    const parsed = Number(String(value).replace(/[^\d.-]/g, ''));
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const normalizeStatus = (value: any) => {
+    const text = String(value || '').trim().toLowerCase();
+    if (['停用', 'inactive', 'disabled', '0', '否'].includes(text)) return 'inactive';
+    return 'active';
+  };
+
+  const normalizePlatform = (value: any) => {
+    const text = String(value || '').trim();
+    if (text.toLowerCase() === 'shopee') return 'Shopee';
+    return 'TikTok';
+  };
+
+  const getImportValue = (row: Record<string, any>, labels: string[]) => {
+    for (const label of labels) {
+      if (row[label] !== undefined && row[label] !== null && row[label] !== '') return row[label];
+    }
+    return '';
+  };
+
+  const downloadInfluencerImportTemplate = () => {
+    const exampleRow = [
+      'TikTok',
+      '示例达人',
+      'example_account',
+      10,
+      '示例机构',
+      'GMV 5000，观看人数 1万',
+      '美妆/家居',
+      '微信或手机号',
+      '新加坡示例地址',
+      '备注',
+      '活跃',
+    ];
+    const worksheet = XLSX.utils.aoa_to_sheet([influencerImportHeaders, exampleRow]);
+    worksheet['!cols'] = influencerImportHeaders.map(() => ({ wch: 18 }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '达人导入模板');
+    XLSX.writeFile(workbook, '达人导入模板.xlsx');
+  };
+
+  const handleInfluencerImport = async (file: File) => {
+    setImporting(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: '' });
+      const existingKeys = new Set(influencers.map((item) => `${item.platform}__${item.account}`.toLowerCase()));
+      const payloads = rows.map((row, index) => {
+        const platform = normalizePlatform(getImportValue(row, ['平台', 'platform']));
+        const name = String(getImportValue(row, ['达人名称', 'name'])).trim();
+        const account = String(getImportValue(row, ['达人账号', 'account'])).trim();
+
+        if (!name) throw new Error(`第 ${index + 2} 行缺少达人名称`);
+        if (!account) throw new Error(`第 ${index + 2} 行缺少达人账号`);
+
+        return {
+          platform,
+          name,
+          account,
+          agency: String(getImportValue(row, ['达人机构', 'agency'])).trim() || undefined,
+          single_session_data: String(getImportValue(row, ['达人单场数据', 'single_session_data'])).trim() || undefined,
+          product_direction: String(getImportValue(row, ['达人选品方向', 'product_direction'])).trim() || undefined,
+          commission_rate: parseImportNumber(getImportValue(row, ['达人佣金', '佣金', 'commission_rate']), 0),
+          contact: String(getImportValue(row, ['联系方式', 'contact'])).trim() || undefined,
+          sample_address: String(getImportValue(row, ['达人寄样地址', 'sample_address'])).trim() || undefined,
+          notes: String(getImportValue(row, ['其他备注', 'notes'])).trim() || undefined,
+          status: normalizeStatus(getImportValue(row, ['状态', 'status'])),
+        };
+      });
+
+      const newPayloads = payloads.filter((item) => !existingKeys.has(`${item.platform}__${item.account}`.toLowerCase()));
+      if (!newPayloads.length) {
+        message.warning('没有可导入的新达人，可能都已存在');
+        return false;
+      }
+
+      await Promise.all(newPayloads.map((payload) => influencerApi.create(payload)));
+      message.success(`已导入 ${newPayloads.length} 个达人${newPayloads.length < payloads.length ? `，跳过 ${payloads.length - newPayloads.length} 个重复达人` : ''}`);
+      fetchInfluencers();
+    } catch (error) {
+      console.error('导入达人失败:', error);
+      message.error(`导入失败：${(error as Error).message || '请检查模板内容'}`);
+    } finally {
+      setImporting(false);
+    }
+    return false;
   };
 
   const filteredInfluencers = influencers.filter(item => {
@@ -383,6 +494,18 @@ const Influencers: React.FC = () => {
           >
             添加达人
           </Button>
+          <Button icon={<DownloadOutlined />} onClick={downloadInfluencerImportTemplate}>
+            下载导入模板
+          </Button>
+          <Upload
+            accept=".xlsx,.xls,.csv"
+            beforeUpload={handleInfluencerImport}
+            showUploadList={false}
+          >
+            <Button icon={<UploadOutlined />} loading={importing}>
+              批量导入
+            </Button>
+          </Upload>
           <Button
             icon={<ReloadOutlined />}
             onClick={fetchInfluencers}
