@@ -282,21 +282,19 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     };
   }, [filteredSessions, filteredTravelCostRecords, receivedStatus]);
 
-  const travelHotelReceivableStats = useMemo(() => {
-    const isTravelHotelReason = (item: any) => String(item.reason || '').includes('机酒');
-    const manualTravelHotelRecords = travelReceivableRecords.filter(isTravelHotelReason);
-    const influencerTotal = manualTravelHotelRecords.reduce((sum, item) => {
+  const receivableStats = useMemo(() => {
+    const influencerTotal = travelReceivableRecords.reduce((sum, item) => {
       if (item.receivable_type) return sum + (item.receivable_type === 'influencer' ? Number(item.amount || 0) : 0);
       return sum + Number(item.influencer_receivable || 0);
     }, 0);
-    const manualBrandTotal = manualTravelHotelRecords.reduce((sum, item) => {
+    const manualBrandTotal = travelReceivableRecords.reduce((sum, item) => {
       if (item.receivable_type) return sum + (item.receivable_type === 'brand' ? Number(item.amount || 0) : 0);
       return sum + Number(item.brand_receivable || 0);
     }, 0);
     const sessionBrandTotal = sessions
       .filter((item) => item.schedule_type !== 'travel_note')
       .reduce((sum, item) => sum + Number(item.brand_receivable || 0), 0);
-    const otherTotal = manualTravelHotelRecords.reduce((sum, item) => {
+    const otherTotal = travelReceivableRecords.reduce((sum, item) => {
       if (item.receivable_type) return sum + (item.receivable_type === 'other' ? Number(item.amount || 0) : 0);
       return sum + Number(item.other_receivable || 0);
     }, 0);
@@ -1231,16 +1229,16 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const renderTravelHotelReceivableStats = () => (
     <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收达人款项" value={travelHotelReceivableStats.influencerTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收达人款项" value={receivableStats.influencerTotal} precision={2} prefix="SGD" />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收品牌款项" value={travelHotelReceivableStats.brandTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收品牌款项" value={receivableStats.brandTotal} precision={2} prefix="SGD" />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收其他款项" value={travelHotelReceivableStats.otherTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收其他款项" value={receivableStats.otherTotal} precision={2} prefix="SGD" />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收合计" value={travelHotelReceivableStats.total} precision={2} prefix="SGD" />
+        <Statistic title="应收合计" value={receivableStats.total} precision={2} prefix="SGD" />
       </Col>
     </Row>
   );
