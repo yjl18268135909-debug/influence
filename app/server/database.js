@@ -233,6 +233,21 @@ function initDatabase() {
     )
   `);
 
+  // 机酒/应收款项明细表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS travel_receivables (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      receivable_date DATETIME NOT NULL,
+      receivable_type TEXT NOT NULL,
+      object_name TEXT,
+      reason TEXT,
+      amount REAL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // 系统账号表
   db.exec(`
     CREATE TABLE IF NOT EXISTS app_accounts (
@@ -274,6 +289,10 @@ function initDatabase() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_costs_influencer ON costs(related_influencer_id)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_live_sessions_date ON live_sessions(session_date)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_live_sessions_influencer ON live_sessions(influencer_id)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_date ON travel_receivables(receivable_date)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_type ON travel_receivables(receivable_type)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_reason ON travel_receivables(reason)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
 
   console.log('数据库初始化完成');
 }

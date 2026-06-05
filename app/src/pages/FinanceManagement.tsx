@@ -3,7 +3,7 @@ import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Pop
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { liveSessionApi } from '../api';
+import { liveSessionApi, travelReceivableApi } from '../api';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -75,9 +75,10 @@ interface FinanceManagementProps {
 const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = false, receivablesOnly = false }) => {
   const [transactions, setTransactions] = useState(initialTransactions);
   const [travelCostRecords, setTravelCostRecords] = useState<any[]>(() => readStorage(TRAVEL_COST_RECORDS_STORAGE_KEY, []));
-  const [travelReceivableRecords, setTravelReceivableRecords] = useState<any[]>(() => readStorage(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY, []));
+  const [travelReceivableRecords, setTravelReceivableRecords] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
+  const [loadingTravelReceivables, setLoadingTravelReceivables] = useState(false);
   const [open, setOpen] = useState(false);
   const [receivableModalOpen, setReceivableModalOpen] = useState(false);
   const [receptionRecord, setReceptionRecord] = useState<any | null>(null);
@@ -100,6 +101,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
   useEffect(() => {
     fetchSessions();
+    fetchTravelReceivables();
     const draft = readStorage<any | null>(TRAVEL_COST_DRAFT_STORAGE_KEY, null);
     travelCostForm.setFieldsValue(draft ? deserializeTravelCostDraft(draft) : DEFAULT_TRAVEL_COST_FORM_VALUES);
   }, []);
@@ -107,10 +109,6 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   useEffect(() => {
     localStorage.setItem(TRAVEL_COST_RECORDS_STORAGE_KEY, JSON.stringify(travelCostRecords));
   }, [travelCostRecords]);
-
-  useEffect(() => {
-    localStorage.setItem(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY, JSON.stringify(travelReceivableRecords));
-  }, [travelReceivableRecords]);
 
   useEffect(() => {
     localStorage.setItem(TRAVEL_RECEIVED_STATUS_STORAGE_KEY, JSON.stringify(receivedStatus));
@@ -126,6 +124,46 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       message.error('获取排期数据失败');
     } finally {
       setLoadingSessions(false);
+    }
+  };
+
+  const fetchTravelReceivables = async () => {
+    setLoadingTravelReceivables(true);
+    try {
+      const res = await travelReceivableApi.getAll();
+      const serverRecords = Array.isArray(res.data?.data) ? res.data.data : [];
+      const localRecords = readStorage<any[]>(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY, []);
+
+      if (!serverRecords.length && localRecords.length) {
+        const migratedRecords = [];
+        for (const item of localRecords) {
+          const payload = {
+            receivable_date: item.receivable_date || dayjs().format('YYYY-MM-DD'),
+            receivable_type: item.receivable_type
+              || (Number(item.influencer_receivable || 0) > 0 ? 'influencer' : Number(item.other_receivable || 0) > 0 ? 'other' : 'brand'),
+            object_name: item.object_name || null,
+            reason: item.reason || null,
+            amount: item.receivable_type ? Number(item.amount || 0) : getLegacyReceivableAmount(item),
+            notes: item.notes || '',
+          };
+          const created = await travelReceivableApi.create(payload);
+          if (created.data?.data) migratedRecords.push(created.data.data);
+        }
+        localStorage.setItem(`${TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY}_backup`, JSON.stringify(localRecords));
+        localStorage.removeItem(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY);
+        setTravelReceivableRecords(migratedRecords);
+        message.success('已把本机缓存的应收款项迁移到数据库');
+        return;
+      }
+
+      setTravelReceivableRecords(serverRecords);
+    } catch (error) {
+      console.error('获取应收款项失败:', error);
+      message.error('获取应收款项失败');
+      const localRecords = readStorage<any[]>(TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY, []);
+      if (localRecords.length) setTravelReceivableRecords(localRecords);
+    } finally {
+      setLoadingTravelReceivables(false);
     }
   };
 
@@ -511,28 +549,37 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   };
 
   const saveTravelReceivableRecord = async () => {
-    const values = await travelReceivableForm.validateFields();
-    const reason = Array.isArray(values.reason) ? values.reason[0] : values.reason;
-    const record = {
-      id: editingTravelReceivableRecord?.id || `TR${Date.now()}`,
-      created_at: editingTravelReceivableRecord?.created_at || dayjs().format('YYYY-MM-DD HH:mm:ss'),
-      receivable_date: values.receivable_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
-      receivable_type: values.receivable_type,
-      object_name: values.object_name,
-      reason,
-      amount: Number(values.amount || 0),
-      notes: values.notes || '',
-    };
-    setTravelReceivableRecords((prev) => (
-      editingTravelReceivableRecord
-        ? prev.map((item) => item.id === editingTravelReceivableRecord.id ? record : item)
-        : [record, ...prev]
-    ));
-    travelReceivableForm.resetFields();
-    travelReceivableForm.setFieldsValue({ receivable_date: dayjs(), receivable_type: 'brand' });
-    setEditingTravelReceivableRecord(null);
-    setReceivableModalOpen(false);
-    message.success(editingTravelReceivableRecord ? '应收款项已更新' : '应收款项已新增');
+    try {
+      const values = await travelReceivableForm.validateFields();
+      const reason = Array.isArray(values.reason) ? values.reason[0] : values.reason;
+      const payload = {
+        receivable_date: values.receivable_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
+        receivable_type: values.receivable_type,
+        object_name: values.object_name,
+        reason,
+        amount: Number(values.amount || 0),
+        notes: values.notes || '',
+      };
+      const response = editingTravelReceivableRecord
+        ? await travelReceivableApi.update(editingTravelReceivableRecord.id, payload)
+        : await travelReceivableApi.create(payload);
+      const savedRecord = response.data?.data;
+
+      setTravelReceivableRecords((prev) => (
+        editingTravelReceivableRecord
+          ? prev.map((item) => String(item.id) === String(editingTravelReceivableRecord.id) ? savedRecord : item)
+          : [savedRecord, ...prev]
+      ));
+      travelReceivableForm.resetFields();
+      travelReceivableForm.setFieldsValue({ receivable_date: dayjs(), receivable_type: 'brand' });
+      setEditingTravelReceivableRecord(null);
+      setReceivableModalOpen(false);
+      message.success(editingTravelReceivableRecord ? '应收款项已更新' : '应收款项已新增');
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      console.error('保存应收款项失败:', error);
+      message.error('保存应收款项失败');
+    }
   };
 
   const openTravelReceivableEditModal = (record: any) => {
@@ -550,9 +597,15 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     setReceivableModalOpen(true);
   };
 
-  const deleteTravelReceivableRecord = (id: string) => {
-    setTravelReceivableRecords((prev) => prev.filter((item) => item.id !== id));
-    message.success('应收款项记录已删除');
+  const deleteTravelReceivableRecord = async (id: string) => {
+    try {
+      await travelReceivableApi.delete(id);
+      setTravelReceivableRecords((prev) => prev.filter((item) => String(item.id) !== String(id)));
+      message.success('应收款项记录已删除');
+    } catch (error) {
+      console.error('删除应收款项失败:', error);
+      message.error('删除应收款项失败');
+    }
   };
 
   const travelReceivableReasonOptions = useMemo(() => {
@@ -1044,6 +1097,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       <Table
         dataSource={filteredTravelReceivableRecords}
         rowKey="id"
+        loading={loadingTravelReceivables}
         pagination={{ pageSize: 10 }}
         locale={{ emptyText: '暂无应收款项记录' }}
         columns={[

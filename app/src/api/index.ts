@@ -101,6 +101,14 @@ export const incomeApi = {
   create: (data: any) => api.post('/income', data),
 };
 
+// 应收款项相关API
+export const travelReceivableApi = {
+  getAll: () => api.get('/travel-receivables'),
+  create: (data: any) => api.post('/travel-receivables', data),
+  update: (id: number | string, data: any) => api.put(`/travel-receivables/${id}`, data),
+  delete: (id: number | string) => api.delete(`/travel-receivables/${id}`),
+};
+
 // 报表相关API
 export const reportApi = {
   getSummary: (params?: any) => api.get('/reports/summary', { params }),

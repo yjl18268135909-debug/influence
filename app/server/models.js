@@ -78,6 +78,7 @@ function exportAllData() {
     'expenses',
     'costs',
     'income',
+    'travel_receivables',
   ];
 
   const data = tables.reduce((result, table) => {
@@ -96,6 +97,65 @@ function exportAllData() {
     database: 'sqlite',
     data,
   };
+}
+
+// ==================== 应收款项相关操作 ====================
+
+function getTravelReceivables() {
+  return db.prepare(`
+    SELECT *
+    FROM travel_receivables
+    ORDER BY receivable_date DESC, created_at DESC, id DESC
+  `).all();
+}
+
+function createTravelReceivable(data) {
+  const stmt = db.prepare(`
+    INSERT INTO travel_receivables
+      (receivable_date, receivable_type, object_name, reason, amount, notes)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const result = stmt.run(
+    data.receivable_date,
+    data.receivable_type,
+    data.object_name || null,
+    data.reason || null,
+    Number(data.amount || 0),
+    data.notes || null
+  );
+  return db.prepare('SELECT * FROM travel_receivables WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function updateTravelReceivable(id, data) {
+  const current = db.prepare('SELECT * FROM travel_receivables WHERE id = ?').get(id);
+  if (!current) return null;
+
+  db.prepare(`
+    UPDATE travel_receivables
+    SET receivable_date = ?,
+        receivable_type = ?,
+        object_name = ?,
+        reason = ?,
+        amount = ?,
+        notes = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    data.receivable_date,
+    data.receivable_type,
+    data.object_name || null,
+    data.reason || null,
+    Number(data.amount || 0),
+    data.notes || null,
+    id
+  );
+
+  return db.prepare('SELECT * FROM travel_receivables WHERE id = ?').get(id);
+}
+
+function deleteTravelReceivable(id) {
+  db.prepare('DELETE FROM travel_receivables WHERE id = ?').run(id);
+  return { success: true };
 }
 
 // ==================== 达人相关操作 ====================
@@ -939,6 +999,10 @@ module.exports = {
   updateAccount,
   deleteAccount,
   exportAllData,
+  getTravelReceivables,
+  createTravelReceivable,
+  updateTravelReceivable,
+  deleteTravelReceivable,
   // 达人
   getInfluencers,
   createInfluencer,

@@ -52,6 +52,26 @@ async function ensureAccountsTable() {
   }
 }
 
+async function ensureTravelReceivablesTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS travel_receivables (
+      id SERIAL PRIMARY KEY,
+      receivable_date DATE NOT NULL,
+      receivable_type TEXT NOT NULL,
+      object_name TEXT,
+      reason TEXT,
+      amount DOUBLE PRECISION DEFAULT 0,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_date ON travel_receivables(receivable_date)');
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_type ON travel_receivables(receivable_type)');
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_reason ON travel_receivables(reason)');
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
+}
+
 async function getAccounts() {
   await ensureAccountsTable();
   return query(`
@@ -113,6 +133,7 @@ async function deleteAccount(id) {
 
 async function exportAllData() {
   await ensureAccountsTable();
+  await ensureTravelReceivablesTable();
   const tables = [
     'influencers',
     'merchants',
@@ -122,6 +143,7 @@ async function exportAllData() {
     'expenses',
     'costs',
     'income',
+    'travel_receivables',
   ];
 
   const data = {};
@@ -139,6 +161,93 @@ async function exportAllData() {
     database: 'postgres',
     data,
   };
+}
+
+async function getTravelReceivables() {
+  await ensureTravelReceivablesTable();
+  return query(`
+    SELECT
+      id,
+      to_char(receivable_date, 'YYYY-MM-DD') as receivable_date,
+      receivable_type,
+      object_name,
+      reason,
+      COALESCE(amount, 0)::float as amount,
+      notes,
+      created_at,
+      updated_at
+    FROM travel_receivables
+    ORDER BY receivable_date DESC, created_at DESC, id DESC
+  `);
+}
+
+async function createTravelReceivable(data) {
+  await ensureTravelReceivablesTable();
+  const row = await one(
+    `INSERT INTO travel_receivables
+      (receivable_date, receivable_type, object_name, reason, amount, notes)
+     VALUES ($1,$2,$3,$4,$5,$6)
+     RETURNING
+      id,
+      to_char(receivable_date, 'YYYY-MM-DD') as receivable_date,
+      receivable_type,
+      object_name,
+      reason,
+      COALESCE(amount, 0)::float as amount,
+      notes,
+      created_at,
+      updated_at`,
+    [
+      data.receivable_date,
+      data.receivable_type,
+      data.object_name || null,
+      data.reason || null,
+      Number(data.amount || 0),
+      data.notes || null,
+    ]
+  );
+  return row;
+}
+
+async function updateTravelReceivable(id, data) {
+  await ensureTravelReceivablesTable();
+  const row = await one(
+    `UPDATE travel_receivables
+     SET receivable_date = $1,
+         receivable_type = $2,
+         object_name = $3,
+         reason = $4,
+         amount = $5,
+         notes = $6,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $7
+     RETURNING
+      id,
+      to_char(receivable_date, 'YYYY-MM-DD') as receivable_date,
+      receivable_type,
+      object_name,
+      reason,
+      COALESCE(amount, 0)::float as amount,
+      notes,
+      created_at,
+      updated_at`,
+    [
+      data.receivable_date,
+      data.receivable_type,
+      data.object_name || null,
+      data.reason || null,
+      Number(data.amount || 0),
+      data.notes || null,
+      id,
+    ]
+  );
+  return row;
+}
+
+async function deleteTravelReceivable(id) {
+  await ensureTravelReceivablesTable();
+  await query('DELETE FROM travel_receivables WHERE id = $1', [id]);
+  return { success: true };
 }
 
 async function getInfluencers(filters = {}) {
@@ -782,6 +891,10 @@ module.exports = {
   updateAccount,
   deleteAccount,
   exportAllData,
+  getTravelReceivables,
+  createTravelReceivable,
+  updateTravelReceivable,
+  deleteTravelReceivable,
   getInfluencers,
   createInfluencer,
   updateInfluencer,

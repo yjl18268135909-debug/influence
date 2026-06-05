@@ -187,6 +187,18 @@ create table public.income (
   created_at timestamptz default current_timestamp
 );
 
+create table if not exists public.travel_receivables (
+  id serial primary key,
+  receivable_date date not null,
+  receivable_type text not null,
+  object_name text,
+  reason text,
+  amount double precision default 0,
+  notes text,
+  created_at timestamptz default current_timestamp,
+  updated_at timestamptz default current_timestamp
+);
+
 create table if not exists public.app_accounts (
   id serial primary key,
   username text unique not null,
@@ -218,6 +230,10 @@ create index idx_costs_date on public.costs(cost_date);
 create index idx_costs_influencer on public.costs(related_influencer_id);
 create index idx_live_sessions_date on public.live_sessions(session_date);
 create index idx_live_sessions_influencer on public.live_sessions(influencer_id);
+create index if not exists idx_travel_receivables_date on public.travel_receivables(receivable_date);
+create index if not exists idx_travel_receivables_type on public.travel_receivables(receivable_type);
+create index if not exists idx_travel_receivables_reason on public.travel_receivables(reason);
+create index if not exists idx_travel_receivables_object on public.travel_receivables(object_name);
 
 alter table public.influencers disable row level security;
 alter table public.merchants disable row level security;
@@ -227,6 +243,7 @@ alter table public.orders disable row level security;
 alter table public.expenses disable row level security;
 alter table public.costs disable row level security;
 alter table public.income disable row level security;
+alter table public.travel_receivables disable row level security;
 alter table public.app_accounts disable row level security;
 
 commit;

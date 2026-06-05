@@ -50,7 +50,7 @@ const requireOwner = (req, res, next) => {
 };
 
 app.use(['/api/accounts', '/api/export'], requireOwner);
-app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
+app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports', '/api/travel-receivables'], requireFullAccess);
 
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const username = String(req.body.username || '').trim();
@@ -255,6 +255,30 @@ app.post('/api/income', asyncRoute(async (req, res) => {
   }
   const data = await models.createIncome(req.body);
   res.json({ success: true, data });
+}));
+
+app.get('/api/travel-receivables', asyncRoute(async (req, res) => {
+  const data = await models.getTravelReceivables();
+  res.json({ success: true, data });
+}));
+
+app.post('/api/travel-receivables', asyncRoute(async (req, res) => {
+  const data = await models.createTravelReceivable(req.body);
+  res.json({ success: true, data });
+}));
+
+app.put('/api/travel-receivables/:id', asyncRoute(async (req, res) => {
+  const data = await models.updateTravelReceivable(parseInt(req.params.id, 10), req.body);
+  if (!data) {
+    res.status(404).json({ success: false, error: '应收款项不存在' });
+    return;
+  }
+  res.json({ success: true, data });
+}));
+
+app.delete('/api/travel-receivables/:id', asyncRoute(async (req, res) => {
+  await models.deleteTravelReceivable(parseInt(req.params.id, 10));
+  res.json({ success: true });
 }));
 
 app.get('/api/reports/summary', asyncRoute(async (req, res) => {
