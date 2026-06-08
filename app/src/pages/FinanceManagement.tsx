@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
+import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -19,7 +19,7 @@ const TRAVEL_COST_RECORDS_STORAGE_KEY = 'shopfluence_travel_cost_records';
 const TRAVEL_COST_DRAFT_STORAGE_KEY = 'shopfluence_travel_cost_draft';
 const TRAVEL_RECEIVED_STATUS_STORAGE_KEY = 'shopfluence_travel_received_status';
 const TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY = 'shopfluence_travel_receivable_records';
-const DEFAULT_TRAVEL_COST_FORM_VALUES = { currency: 'SGD', exchange_rate: 5.35, cabin_type: 'economy' };
+const DEFAULT_TRAVEL_COST_FORM_VALUES = { currency: 'CNY', exchange_rate: 1, cabin_type: 'economy' };
 const TRAVEL_RECEIVABLE_TYPE_OPTIONS = [
   { label: '应收达人', value: 'influencer' },
   { label: '应收品牌', value: 'brand' },
@@ -103,7 +103,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     fetchSessions();
     fetchTravelReceivables();
     const draft = readStorage<any | null>(TRAVEL_COST_DRAFT_STORAGE_KEY, null);
-    travelCostForm.setFieldsValue(draft ? deserializeTravelCostDraft(draft) : DEFAULT_TRAVEL_COST_FORM_VALUES);
+    travelCostForm.setFieldsValue({
+      ...(draft ? deserializeTravelCostDraft(draft) : DEFAULT_TRAVEL_COST_FORM_VALUES),
+      currency: 'CNY',
+      exchange_rate: 1,
+    });
   }, []);
 
   useEffect(() => {
@@ -324,13 +328,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
   const travelCostSummary = useMemo(() => {
     const values = watchedTravelValues || {};
-    const currency = values.currency || 'SGD';
-    const exchangeRate = Number(values.exchange_rate || 5.35);
+    const currency = 'CNY';
     const range = values.date_range;
     const influencerName = values.influencer_name;
     const baseCost = ['flight_cost', 'hotel_cost', 'business_car_cost'].reduce((sum, key) => sum + Number(values[key] || 0), 0);
     const flightHotelBaseCost = Number(values.flight_cost || 0) + Number(values.hotel_cost || 0);
-    const toCurrency = (amount: number) => currency === 'SGD' ? amount : amount * exchangeRate;
     const rangeSessions = range && influencerName
       ? sessions.filter((item) => {
         if (item.schedule_type === 'travel_note') return false;
@@ -341,12 +343,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       })
       : [];
     const tapSessions = rangeSessions.filter((item) => sessionMode(item).toUpperCase() === 'TAP');
-    const displayCurrency = currency === 'SGD' ? 'SGD' : 'CNY';
-    const totalCost = toCurrency(baseCost);
-    const flightHotelCost = toCurrency(flightHotelBaseCost);
+    const totalCost = baseCost;
+    const flightHotelCost = flightHotelBaseCost;
 
     return {
-      currency: displayCurrency,
+      currency,
       totalCost,
       flightHotelCost,
       sessionCount: rangeSessions.length,
@@ -361,7 +362,6 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const addTravelCostRecord = async () => {
     const values = await travelCostForm.validateFields();
     const [startDate, endDate] = values.date_range;
-    const multiplier = values.currency === 'CNY' ? Number(values.exchange_rate || 5.35) : 1;
     const record = {
       id: `TC${Date.now()}`,
       created_at: dayjs().format('YYYY-MM-DD HH:mm:ss'),
@@ -370,10 +370,10 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       date_end: endDate.format('YYYY-MM-DD'),
       cabin_type: values.cabin_type,
       currency: travelCostSummary.currency,
-      exchange_rate: Number(values.exchange_rate || 5.35),
-      flight_cost: Number(values.flight_cost || 0) * multiplier,
-      hotel_cost: Number(values.hotel_cost || 0) * multiplier,
-      business_car_cost: Number(values.business_car_cost || 0) * multiplier,
+      exchange_rate: 1,
+      flight_cost: Number(values.flight_cost || 0),
+      hotel_cost: Number(values.hotel_cost || 0),
+      business_car_cost: Number(values.business_car_cost || 0),
       taxi_reception_cost: 0,
       meal_reception_cost: 0,
       internal_team_travel_cost: 0,
@@ -760,17 +760,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
               <RangePicker style={{ width: '100%' }} />
             </Form.Item>
           </Col>
-          <Col xs={24} md={4}>
-            <Form.Item name="currency" label="计算币种">
-              <Radio.Group optionType="button" buttonStyle="solid">
-                <Radio.Button value="SGD">新币</Radio.Button>
-                <Radio.Button value="CNY">人民币</Radio.Button>
-              </Radio.Group>
-            </Form.Item>
-          </Col>
-          <Col xs={24} md={4}>
-            <Form.Item name="exchange_rate" label="汇率">
-              <InputNumber<number> style={{ width: '100%' }} min={0} precision={4} addonBefore="1 SGD =" addonAfter="RMB" onFocus={(event) => event.target.select()} />
+          <Col xs={24} md={8}>
+            <Form.Item label="录入币种">
+              <Input value="人民币（CNY）" disabled />
             </Form.Item>
           </Col>
           <Col xs={24} md={8}>
@@ -781,9 +773,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
               </Select>
             </Form.Item>
           </Col>
-          <Col xs={24} md={8}><Form.Item name="flight_cost" label="机票费用"><InputNumber<number> style={{ width: '100%' }} min={0} precision={2} onFocus={(event) => event.target.select()} /></Form.Item></Col>
-          <Col xs={24} md={8}><Form.Item name="hotel_cost" label="酒店费用"><InputNumber<number> style={{ width: '100%' }} min={0} precision={2} onFocus={(event) => event.target.select()} /></Form.Item></Col>
-          <Col xs={24} md={8}><Form.Item name="business_car_cost" label="商务车费用"><InputNumber<number> style={{ width: '100%' }} min={0} precision={2} onFocus={(event) => event.target.select()} /></Form.Item></Col>
+          <Col xs={24} md={8}><Form.Item name="flight_cost" label="机票费用"><InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="CNY" onFocus={(event) => event.target.select()} /></Form.Item></Col>
+          <Col xs={24} md={8}><Form.Item name="hotel_cost" label="酒店费用"><InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="CNY" onFocus={(event) => event.target.select()} /></Form.Item></Col>
+          <Col xs={24} md={8}><Form.Item name="business_car_cost" label="商务车费用"><InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="CNY" onFocus={(event) => event.target.select()} /></Form.Item></Col>
         </Row>
         <Space style={{ marginBottom: 16 }}>
           <Button type="primary" onClick={addTravelCostRecord}>确定录入</Button>
