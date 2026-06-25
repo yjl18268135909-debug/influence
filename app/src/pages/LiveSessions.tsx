@@ -475,13 +475,31 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return merchant?.id || merchant?._id;
   };
 
-  const jumpTimelineToToday = () => {
+  const scrollTimelineToDate = (date: Dayjs) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!scheduleRef.current) return;
+        const target = scheduleRef.current.querySelector<HTMLElement>(`[data-schedule-date="${date.format('YYYY-MM-DD')}"]`);
+        if (!target) return;
+        scheduleRef.current.scrollLeft = Math.max(target.offsetLeft - 150, 0);
+      });
+    });
+  };
+
+  const jumpTimelineToCurrentMonth = () => {
     setTimelineWeek(dayjs().startOf('month'));
     requestAnimationFrame(() => {
       if (scheduleRef.current) {
         scheduleRef.current.scrollLeft = 0;
       }
     });
+  };
+
+  const jumpTimelineToToday = () => {
+    const today = dayjs();
+    setSelectedDate(today);
+    setTimelineWeek(today.startOf('month'));
+    scrollTimelineToDate(today);
   };
 
   const openCreateModal = (date: Dayjs = selectedDate, influencerName?: string) => {
@@ -1741,7 +1759,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           onChange={(value) => value && setTimelineWeek(value.startOf('month'))}
         />
         <Button onClick={() => setTimelineWeek(timelineWeek.subtract(1, 'month'))}>上月</Button>
-        <Button onClick={jumpTimelineToToday}>本月</Button>
+        <Button onClick={jumpTimelineToCurrentMonth}>本月</Button>
         <Button onClick={() => setTimelineWeek(timelineWeek.add(1, 'month'))}>下月</Button>
         <Button onClick={jumpTimelineToToday}>回到今天</Button>
       </Space>
@@ -1753,7 +1771,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       >
         <div className="schedule-header schedule-name-cell">达人</div>
         {timelineDays.map((day) => (
-          <div key={day.format('YYYY-MM-DD')} className="schedule-header">
+          <div key={day.format('YYYY-MM-DD')} className="schedule-header" data-schedule-date={day.format('YYYY-MM-DD')}>
             <div>{day.format('MM/DD')}</div>
             <span>{day.format('ddd')}</span>
           </div>
