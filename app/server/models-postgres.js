@@ -445,6 +445,8 @@ async function getLiveSessions(filters = {}) {
   }
   return query(
     `SELECT ls.*, i.name as influencer_name, m.name as merchant_name,
+            i.commission_rate as influencer_default_commission_rate,
+            m.commission_rate as merchant_commission_rate,
             m.category as merchant_category, m.cooperation_mode as merchant_cooperation_mode
      FROM live_sessions ls
      LEFT JOIN influencers i ON ls.influencer_id = i.id

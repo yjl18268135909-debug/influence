@@ -65,15 +65,6 @@ const formatCommissionRate = (value: number | string | null | undefined) => {
   return `${numeric.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
 };
 
-const formatSessionCommissionLine = (item: any) => {
-  const influencerCommission = formatCommissionRate(item.influencer_commission_rate);
-  const brandCommission = formatCommissionRate(item.brand_commission_rate);
-  return [
-    influencerCommission ? `达人佣金 ${influencerCommission}` : '',
-    brandCommission ? `品牌佣金 ${brandCommission}` : '',
-  ].filter(Boolean).join(' · ');
-};
-
 const formatInlineInfo = (...values: Array<string | null | undefined>) => values.filter(Boolean).join(' · ');
 
 const formatBrandName = (value: string | null | undefined) => {
@@ -475,6 +466,37 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return merchant?.id || merchant?._id;
   };
 
+  const getSessionInfluencerCommissionRate = (item: any) => {
+    if (Number(item.influencer_commission_rate || 0) > 0) return item.influencer_commission_rate;
+    if (Number(item.influencer_default_commission_rate || 0) > 0) return item.influencer_default_commission_rate;
+    const influencer = influencers.find((influencerItem) => {
+      const itemId = influencerItem.id || influencerItem._id;
+      return (item.influencer_id && String(itemId) === String(item.influencer_id))
+        || (item.influencer_name && influencerItem.name === item.influencer_name);
+    });
+    return influencer?.commission_rate || 0;
+  };
+
+  const getSessionBrandCommissionRate = (item: any) => {
+    if (Number(item.brand_commission_rate || 0) > 0) return item.brand_commission_rate;
+    if (Number(item.merchant_commission_rate || 0) > 0) return item.merchant_commission_rate;
+    const merchant = merchants.find((merchantItem) => {
+      const itemId = merchantItem.id || merchantItem._id;
+      return (item.merchant_id && String(itemId) === String(item.merchant_id))
+        || (item.merchant_name && merchantItem.name === item.merchant_name);
+    });
+    return merchant?.commission_rate || 0;
+  };
+
+  const getSessionCommissionLine = (item: any) => {
+    const influencerCommission = formatCommissionRate(getSessionInfluencerCommissionRate(item));
+    const brandCommission = formatCommissionRate(getSessionBrandCommissionRate(item));
+    return [
+      influencerCommission ? `达人佣金 ${influencerCommission}` : '',
+      brandCommission ? `品牌佣金 ${brandCommission}` : '',
+    ].filter(Boolean).join(' · ');
+  };
+
   const scrollTimelineToDate = (date: Dayjs) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
@@ -547,6 +569,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       cargo_sheet: record.cargo_sheet || getMerchantCargoSheet(record.merchant_id, record.merchant_name),
       big_screen_screenshot: record.big_screen_screenshot ? [{ uid: '-1', name: record.big_screen_screenshot, status: 'done' }] : [],
       traffic_plan: record.traffic_plan || 'self',
+      influencer_commission_rate: record.influencer_commission_rate || record.influencer_default_commission_rate || 0,
+      brand_commission_rate: record.brand_commission_rate || record.merchant_commission_rate || 0,
     });
     setModalVisible(true);
   };
@@ -828,8 +852,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       brand: formatBrandName(item.merchant_name),
       category: getSessionBrandCategory(item),
       platform: item.platform || '未填写',
-      influencer_commission_rate: Number(item.influencer_commission_rate || 0),
-      brand_commission_rate: Number(item.brand_commission_rate || 0),
+      influencer_commission_rate: Number(getSessionInfluencerCommissionRate(item) || 0),
+      brand_commission_rate: Number(getSessionBrandCommissionRate(item) || 0),
       expected_gmv: Number(item.expected_gmv || 0),
       estimated_ad_cost: Number(item.estimated_ad_cost || 0),
       duration_hours: Number(item.duration_hours || 0),
@@ -1272,14 +1296,14 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       dataIndex: 'influencer_commission_rate',
       key: 'influencer_commission_rate',
       width: 110,
-      render: (value: number) => formatCommissionRate(value) || '-',
+      render: (_value: number, record: any) => formatCommissionRate(getSessionInfluencerCommissionRate(record)) || '-',
     },
     {
       title: '品牌佣金',
       dataIndex: 'brand_commission_rate',
       key: 'brand_commission_rate',
       width: 110,
-      render: (value: number) => formatCommissionRate(value) || '-',
+      render: (_value: number, record: any) => formatCommissionRate(getSessionBrandCommissionRate(record)) || '-',
     },
     {
       title: '平台',
@@ -1363,14 +1387,14 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       dataIndex: 'influencer_commission_rate',
       key: 'influencer_commission_rate',
       width: 110,
-      render: (value: number) => formatCommissionRate(value) || '-',
+      render: (_value: number, record: any) => formatCommissionRate(getSessionInfluencerCommissionRate(record)) || '-',
     },
     {
       title: '品牌佣金',
       dataIndex: 'brand_commission_rate',
       key: 'brand_commission_rate',
       width: 110,
-      render: (value: number) => formatCommissionRate(value) || '-',
+      render: (_value: number, record: any) => formatCommissionRate(getSessionBrandCommissionRate(record)) || '-',
     },
     {
       title: '备注',
@@ -1545,8 +1569,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} className="session-detail-panel">
       <Descriptions.Item label="货盘表">{renderCargoSheet(record.cargo_sheet || getMerchantCargoSheet(record.merchant_id, record.merchant_name))}</Descriptions.Item>
       <Descriptions.Item label="目标GMV">{formatMoney(record.expected_gmv)}</Descriptions.Item>
-      <Descriptions.Item label="达人佣金">{formatCommissionRate(record.influencer_commission_rate) || '未填写'}</Descriptions.Item>
-      <Descriptions.Item label="品牌佣金">{formatCommissionRate(record.brand_commission_rate) || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="达人佣金">{formatCommissionRate(getSessionInfluencerCommissionRate(record)) || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="品牌佣金">{formatCommissionRate(getSessionBrandCommissionRate(record)) || '未填写'}</Descriptions.Item>
       <Descriptions.Item label="负责人">{record.owner || '未填写'}</Descriptions.Item>
       <Descriptions.Item label="助播">{record.assistant || '未填写'}</Descriptions.Item>
       <Descriptions.Item label="直播城市">{record.live_city || '未填写'}</Descriptions.Item>
@@ -1901,8 +1925,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                               {renderInlineScheduleField(item, 'assistant', '助播')}
                             </>
                           )}
-                          {formatSessionCommissionLine(item) ? (
-                            <span className="schedule-session-commission">{formatSessionCommissionLine(item)}</span>
+                          {getSessionCommissionLine(item) ? (
+                            <span className="schedule-session-commission">{getSessionCommissionLine(item)}</span>
                           ) : null}
                           <div className="schedule-session-actions">
                             <span
