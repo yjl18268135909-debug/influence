@@ -238,7 +238,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const [editingSession, setEditingSession] = useState<any | null>(null);
   const [showPostDataSection, setShowPostDataSection] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
-  const [timelineWeek, setTimelineWeek] = useState<Dayjs>(dayjs().startOf('day'));
+  const [timelineWeek, setTimelineWeek] = useState<Dayjs>(dayjs().startOf('month'));
   const [filtersByScope, setFiltersByScope] = useState<Record<string, SessionFilters>>({
     management: {},
     communication: {},
@@ -370,7 +370,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   };
 
   const timelineDays = useMemo(() => {
-    const start = timelineWeek.startOf('day');
+    const start = timelineWeek.startOf('month');
     const days = start.add(1, 'month').diff(start, 'day') + 1;
     return Array.from({ length: days }, (_, index) => start.add(index, 'day'));
   }, [timelineWeek]);
@@ -476,7 +476,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   };
 
   const jumpTimelineToToday = () => {
-    setTimelineWeek(dayjs().startOf('day'));
+    setTimelineWeek(dayjs().startOf('month'));
     requestAnimationFrame(() => {
       if (scheduleRef.current) {
         scheduleRef.current.scrollLeft = 0;
@@ -1738,7 +1738,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         <DatePicker
           picker="month"
           value={timelineWeek}
-          onChange={(value) => value && setTimelineWeek(value.startOf('day'))}
+          onChange={(value) => value && setTimelineWeek(value.startOf('month'))}
         />
         <Button onClick={() => setTimelineWeek(timelineWeek.subtract(1, 'month'))}>上月</Button>
         <Button onClick={jumpTimelineToToday}>本月</Button>
