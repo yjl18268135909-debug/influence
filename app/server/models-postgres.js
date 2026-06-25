@@ -457,8 +457,8 @@ async function getLiveSessions(filters = {}) {
 
 const liveSessionColumns = [
   'influencer_id', 'merchant_id', 'platform', 'session_date', 'duration_hours', 'viewers', 'gmv', 'orders_count',
-  'status', 'notes', 'cargo_sheet', 'traffic_plan', 'estimated_ad_cost', 'expected_gmv', 'travel_cost_share',
-  'brand_receivable', 'owner', 'assistant', 'live_city', 'live_venue', 'live_network', 'samples', 'schedule_type',
+  'status', 'notes', 'cargo_sheet', 'traffic_plan', 'estimated_ad_cost', 'expected_gmv', 'influencer_commission_rate',
+  'brand_commission_rate', 'travel_cost_share', 'brand_receivable', 'owner', 'assistant', 'live_city', 'live_venue', 'live_network', 'samples', 'schedule_type',
   'influencer_travel_note', 'schedule_other_note', 'brand_category', 'brand_cooperation_mode', 'plan_notes',
   'execution_notes', 'cost_notes', 'actual_gmv_sgd', 'big_screen_screenshot', 'actual_traffic_usd',
   'screen_traffic_sgd', 'actual_traffic_provider', 'traffic_receivable_type', 'traffic_receivable_amount',
@@ -481,6 +481,8 @@ function liveSessionValues(data, influencerId, merchantId) {
     data.traffic_plan || null,
     data.estimated_ad_cost || 0,
     data.expected_gmv || 0,
+    data.influencer_commission_rate || 0,
+    data.brand_commission_rate || 0,
     data.travel_cost_share || 0,
     data.brand_receivable || 0,
     data.owner || null,

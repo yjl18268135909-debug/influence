@@ -115,6 +115,8 @@ function initDatabase() {
   ensureColumn('live_sessions', 'traffic_plan', 'TEXT');
   ensureColumn('live_sessions', 'estimated_ad_cost', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'expected_gmv', 'REAL DEFAULT 0');
+  ensureColumn('live_sessions', 'influencer_commission_rate', 'REAL DEFAULT 0');
+  ensureColumn('live_sessions', 'brand_commission_rate', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'travel_cost_share', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'brand_receivable', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'owner', 'TEXT');

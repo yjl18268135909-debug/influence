@@ -90,6 +90,8 @@ create table public.live_sessions (
   traffic_plan text,
   estimated_ad_cost double precision default 0,
   expected_gmv double precision default 0,
+  influencer_commission_rate double precision default 0,
+  brand_commission_rate double precision default 0,
   travel_cost_share double precision default 0,
   brand_receivable double precision default 0,
   owner text,

@@ -513,6 +513,11 @@ code {
   color: rgba(0, 0, 0, 0.58);
 }
 
+.schedule-session-commission {
+  color: rgba(0, 0, 0, 0.72);
+  font-weight: 600;
+}
+
 .schedule-session-editable-field {
   cursor: pointer;
 }
