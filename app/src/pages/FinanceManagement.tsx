@@ -19,7 +19,10 @@ const TRAVEL_COST_RECORDS_STORAGE_KEY = 'shopfluence_travel_cost_records';
 const TRAVEL_COST_DRAFT_STORAGE_KEY = 'shopfluence_travel_cost_draft';
 const TRAVEL_RECEIVED_STATUS_STORAGE_KEY = 'shopfluence_travel_received_status';
 const TRAVEL_RECEIVABLE_RECORDS_STORAGE_KEY = 'shopfluence_travel_receivable_records';
-const DEFAULT_TRAVEL_COST_FORM_VALUES = { currency: 'CNY', exchange_rate: 1, cabin_type: 'economy' };
+const TRAVEL_CURRENCY = 'CNY';
+const TRAVEL_SGD_CURRENCY = 'SGD';
+const DEFAULT_TRAVEL_EXCHANGE_RATE = 5.35;
+const DEFAULT_TRAVEL_COST_FORM_VALUES = { currency: 'CNY', exchange_rate: DEFAULT_TRAVEL_EXCHANGE_RATE, cabin_type: 'economy' };
 const TRAVEL_RECEIVABLE_TYPE_OPTIONS = [
   { label: '应收达人', value: 'influencer' },
   { label: '应收品牌', value: 'brand' },
@@ -43,6 +46,13 @@ const readStorage = <T,>(key: string, fallback: T): T => {
 };
 
 const formatMoney = (value: number | string | null | undefined, currency = 'SGD') => `${currency} ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const formatTravelMoney = (value: number | string | null | undefined) => formatMoney(value, TRAVEL_CURRENCY);
+const getTravelExchangeRate = (record?: any) => {
+  const rate = Number(record?.exchange_rate || 0);
+  return rate > 1 ? rate : DEFAULT_TRAVEL_EXCHANGE_RATE;
+};
+const formatTravelSgdMoney = (value: number | string | null | undefined, record?: any) => formatMoney(Number(value || 0) / getTravelExchangeRate(record), TRAVEL_SGD_CURRENCY);
+const formatExchangeRate = (value: number) => Number(value || DEFAULT_TRAVEL_EXCHANGE_RATE).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hasSessionTime = (value: string | null | undefined) => Boolean(value && /\d{2}:\d{2}/.test(value));
 const formatDateRange = (range?: [Dayjs, Dayjs]) => range ? `${range[0].format('YYYY-MM-DD')} 至 ${range[1].format('YYYY-MM-DD')}` : '-';
 const sessionBrand = (item: any) => item.merchant_name || '未添加品牌信息';
@@ -106,7 +116,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     travelCostForm.setFieldsValue({
       ...(draft ? deserializeTravelCostDraft(draft) : DEFAULT_TRAVEL_COST_FORM_VALUES),
       currency: 'CNY',
-      exchange_rate: 1,
+      exchange_rate: DEFAULT_TRAVEL_EXCHANGE_RATE,
     });
   }, []);
 
@@ -329,6 +339,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const travelCostSummary = useMemo(() => {
     const values = watchedTravelValues || {};
     const currency = 'CNY';
+    const exchangeRate = getTravelExchangeRate(values);
     const range = values.date_range;
     const influencerName = values.influencer_name;
     const baseCost = ['flight_cost', 'hotel_cost', 'business_car_cost'].reduce((sum, key) => sum + Number(values[key] || 0), 0);
@@ -348,8 +359,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
     return {
       currency,
+      exchangeRate,
       totalCost,
+      totalCostSgd: totalCost / exchangeRate,
       flightHotelCost,
+      flightHotelCostSgd: flightHotelCost / exchangeRate,
       sessionCount: rangeSessions.length,
       tapSessionCount: tapSessions.length,
       perSessionFlightHotelCost: rangeSessions.length ? flightHotelCost / rangeSessions.length : 0,
@@ -370,7 +384,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       date_end: endDate.format('YYYY-MM-DD'),
       cabin_type: values.cabin_type,
       currency: travelCostSummary.currency,
-      exchange_rate: 1,
+      exchange_rate: travelCostSummary.exchangeRate,
       flight_cost: Number(values.flight_cost || 0),
       hotel_cost: Number(values.hotel_cost || 0),
       business_car_cost: Number(values.business_car_cost || 0),
@@ -418,6 +432,8 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
       const next = {
         ...item,
+        currency: TRAVEL_CURRENCY,
+        exchange_rate: getTravelExchangeRate(item),
         flight_cost: Number(values.flight_cost || 0),
         hotel_cost: Number(values.hotel_cost || 0),
         business_car_cost: Number(values.business_car_cost || 0),
@@ -444,6 +460,8 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       if (item.id !== receptionRecord?.id) return item;
       const next = {
         ...item,
+        currency: TRAVEL_CURRENCY,
+        exchange_rate: getTravelExchangeRate(item),
         taxi_reception_cost: Number(values.taxi_reception_cost || 0),
         meal_reception_cost: Number(values.meal_reception_cost || 0),
         internal_team_travel_cost: Number(values.internal_team_travel_cost || 0),
@@ -490,7 +508,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       receivable_brand_count: receivableBrandCount,
       actual_receivable_total: actualReceivableTotal,
       actual_received_total: receivedTotal,
-      currency: record.currency || 'SGD',
+      currency: TRAVEL_CURRENCY,
       sessions: receivableSessions,
     };
   });
@@ -783,7 +801,8 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       </Form>
 
       <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}><Statistic title="自动总成本" value={travelCostSummary.totalCost} precision={2} prefix={travelCostSummary.currency} /></Col>
+        <Col xs={24} sm={12} lg={6}><Statistic title="自动总成本（人民币）" value={travelCostSummary.totalCost} precision={2} prefix={travelCostSummary.currency} /></Col>
+        <Col xs={24} sm={12} lg={6}><Statistic title="自动总成本（新币）" value={travelCostSummary.totalCostSgd} precision={2} prefix={TRAVEL_SGD_CURRENCY} /></Col>
         <Col xs={24} sm={12} lg={6}><Statistic title="机酒成本" value={travelCostSummary.flightHotelCost} precision={2} prefix={travelCostSummary.currency} /></Col>
         <Col xs={24} sm={12} lg={6}><Statistic title="直播场次数" value={travelCostSummary.sessionCount} /></Col>
         <Col xs={24} sm={12} lg={6}><Statistic title="TAP场次数" value={travelCostSummary.tapSessionCount} /></Col>
@@ -798,7 +817,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       dataSource={filteredTravelCostRecords}
       rowKey="id"
       pagination={{ pageSize: 10 }}
-      scroll={{ x: 1700 }}
+      scroll={{ x: 1850 }}
       locale={{ emptyText: '暂无达人行程成本录入记录' }}
       columns={[
         { title: '录入时间', dataIndex: 'created_at', key: 'created_at', width: 160 },
@@ -812,7 +831,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           width: 140,
           render: (value, record) => (
             <Space size={4}>
-              <span>{formatMoney(value, record.currency)}</span>
+              <span>{formatTravelMoney(value)}</span>
               <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openTravelCostEditModal(record)} />
             </Space>
           ),
@@ -824,7 +843,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           width: 140,
           render: (value, record) => (
             <Space size={4}>
-              <span>{formatMoney(value, record.currency)}</span>
+              <span>{formatTravelMoney(value)}</span>
               <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openTravelCostEditModal(record)} />
             </Space>
           ),
@@ -836,15 +855,16 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           width: 150,
           render: (value, record) => (
             <Space size={4}>
-              <span>{formatMoney(value, record.currency)}</span>
+              <span>{formatTravelMoney(value)}</span>
               <Button type="text" size="small" icon={<EditOutlined />} onClick={() => openTravelCostEditModal(record)} />
             </Space>
           ),
         },
-        { title: '接待打车', dataIndex: 'taxi_reception_cost', key: 'taxi_reception_cost', width: 120, render: (value, record) => formatMoney(value, record.currency) },
-        { title: '接待吃喝', dataIndex: 'meal_reception_cost', key: 'meal_reception_cost', width: 120, render: (value, record) => formatMoney(value, record.currency) },
-        { title: '内部团队差旅费用（机票+酒店）', dataIndex: 'internal_team_travel_cost', key: 'internal_team_travel_cost', width: 220, render: (value, record) => formatMoney(value, record.currency) },
-        { title: '自动总成本', dataIndex: 'total_cost', key: 'total_cost', width: 130, render: (value, record) => formatMoney(value, record.currency) },
+        { title: '接待打车', dataIndex: 'taxi_reception_cost', key: 'taxi_reception_cost', width: 120, render: (value) => formatTravelMoney(value) },
+        { title: '接待吃喝', dataIndex: 'meal_reception_cost', key: 'meal_reception_cost', width: 120, render: (value) => formatTravelMoney(value) },
+        { title: '内部团队差旅费用（机票+酒店）', dataIndex: 'internal_team_travel_cost', key: 'internal_team_travel_cost', width: 220, render: (value) => formatTravelMoney(value) },
+        { title: '自动总成本（新币）', key: 'total_cost_sgd', width: 160, render: (_, record) => formatTravelSgdMoney(record.total_cost || getRecordTotalCost(record), record) },
+        { title: '自动总成本（人民币）', dataIndex: 'total_cost', key: 'total_cost', width: 170, render: (value, record) => formatTravelMoney(value || getRecordTotalCost(record)) },
         {
           title: '操作',
           key: 'action',
@@ -881,7 +901,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
                 key: 'brand_receivable',
                 render: (value, item: any) => (
                   <Space size="small">
-                    <span>{formatMoney(value)}</span>
+                    <span>{formatTravelMoney(value)}</span>
                     <Button type="link" size="small" onClick={() => openReceivableAmountModal(item)}>修改</Button>
                   </Space>
                 ),
@@ -926,11 +946,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         { title: '日期周期', dataIndex: 'date_range', key: 'date_range', width: 210 },
         { title: '直播场次数', dataIndex: 'session_count', key: 'session_count', width: 110 },
         { title: 'TAP场次数', dataIndex: 'tap_session_count', key: 'tap_session_count', width: 110 },
-        { title: '单场机酒均摊', dataIndex: 'per_session_flight_hotel_cost', key: 'per_session_flight_hotel_cost', width: 140, render: (value, record) => formatMoney(value, record.currency) },
-        { title: 'TAP机酒均摊', dataIndex: 'per_tap_flight_hotel_cost', key: 'per_tap_flight_hotel_cost', width: 140, render: (value, record) => formatMoney(value, record.currency) },
+        { title: '单场机酒均摊', dataIndex: 'per_session_flight_hotel_cost', key: 'per_session_flight_hotel_cost', width: 140, render: (value) => formatTravelMoney(value) },
+        { title: 'TAP机酒均摊', dataIndex: 'per_tap_flight_hotel_cost', key: 'per_tap_flight_hotel_cost', width: 140, render: (value) => formatTravelMoney(value) },
         { title: '实际应收品牌数', dataIndex: 'receivable_brand_count', key: 'receivable_brand_count', width: 140 },
-        { title: '实际应收机酒合计', dataIndex: 'actual_receivable_total', key: 'actual_receivable_total', width: 160, render: (value, record) => formatMoney(value, record.currency) },
-        { title: '实际已收机酒合计', dataIndex: 'actual_received_total', key: 'actual_received_total', width: 160, render: (value, record) => formatMoney(value, record.currency) },
+        { title: '实际应收机酒合计', dataIndex: 'actual_receivable_total', key: 'actual_receivable_total', width: 160, render: (value) => formatTravelMoney(value) },
+        { title: '实际已收机酒合计', dataIndex: 'actual_received_total', key: 'actual_received_total', width: 160, render: (value) => formatTravelMoney(value) },
       ]}
     />
   );
@@ -970,15 +990,15 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
             <div className="receivable-calendar-cell">
               <div className="receivable-cell-block receivable-cell-due">
                 <span>应收</span>
-                <strong>{formatMoney(receivableTotal)}</strong>
+                <strong>{formatTravelMoney(receivableTotal)}</strong>
               </div>
               <div className="receivable-cell-block receivable-cell-paid">
                 <span>已收</span>
-                <strong>{formatMoney(receivedTotal)}</strong>
+                <strong>{formatTravelMoney(receivedTotal)}</strong>
               </div>
               <div className="receivable-cell-block receivable-cell-unpaid">
                 <span>未收</span>
-                <strong>{formatMoney(unreceivedTotal)}</strong>
+                <strong>{formatTravelMoney(unreceivedTotal)}</strong>
               </div>
             </div>
           );
@@ -990,13 +1010,13 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           <h3 style={{ margin: '20px 0 12px' }}>
             {selectedReceivableDate.format('YYYY年MM月DD日')} 品牌应收机酒
             <span style={{ marginLeft: 12, color: 'rgba(0, 0, 0, 0.45)', fontSize: 14 }}>
-              应收 {formatMoney(getReceivableTotal(getCalendarReceivableItems(selectedReceivableDate)))}
+              应收 {formatTravelMoney(getReceivableTotal(getCalendarReceivableItems(selectedReceivableDate)))}
             </span>
             <span style={{ marginLeft: 12, color: 'rgba(0, 0, 0, 0.45)', fontSize: 14 }}>
-              已收 {formatMoney(getReceivedTotal(getCalendarReceivableItems(selectedReceivableDate)))}
+              已收 {formatTravelMoney(getReceivedTotal(getCalendarReceivableItems(selectedReceivableDate)))}
             </span>
             <span style={{ marginLeft: 12, color: 'rgba(0, 0, 0, 0.45)', fontSize: 14 }}>
-              未收 {formatMoney(getUnreceivedTotal(getCalendarReceivableItems(selectedReceivableDate)))}
+              未收 {formatTravelMoney(getUnreceivedTotal(getCalendarReceivableItems(selectedReceivableDate)))}
             </span>
           </h3>
           <Table
@@ -1009,7 +1029,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
               { title: '达人', dataIndex: 'influencer_name', key: 'influencer_name', width: 140, render: (value) => value || '未填写达人' },
               { title: '品牌', dataIndex: 'merchant_name', key: 'merchant_name', width: 160, render: (value) => value || '未添加品牌信息' },
               { title: '合作模式', dataIndex: 'brand_cooperation_mode', key: 'brand_cooperation_mode', width: 130, render: (value) => value || '未填写' },
-              { title: '实际应收机酒费用', dataIndex: 'brand_receivable', key: 'brand_receivable', width: 170, render: (value) => formatMoney(value) },
+              { title: '实际应收机酒费用', dataIndex: 'brand_receivable', key: 'brand_receivable', width: 170, render: (value) => formatTravelMoney(value) },
               {
                 title: '是否已收',
                 key: 'received',
@@ -1079,7 +1099,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
             title={receivableReasonFilter ? `${receivableReasonFilter}总计` : '当前列表总计'}
             value={receivableReasonFilterTotal}
             precision={2}
-            prefix="SGD"
+            prefix={TRAVEL_CURRENCY}
           />
         </Col>
       </Row>
@@ -1119,7 +1139,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
             dataIndex: 'amount',
             key: 'amount',
             width: 140,
-            render: (_, record) => formatMoney(getReceivableAmount(record)),
+            render: (_, record) => formatTravelMoney(getReceivableAmount(record)),
           },
           {
             title: '款项备注',
@@ -1154,7 +1174,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       columns={[
         { title: '品牌名称', dataIndex: 'object_name', key: 'object_name', width: 220 },
         { title: '应收明细数', dataIndex: 'detail_count', key: 'detail_count', width: 120 },
-        { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatMoney(value) },
+        { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatTravelMoney(value) },
       ]}
       expandable={{
         expandedRowRender: (record) => (
@@ -1168,7 +1188,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
               { title: '日期', dataIndex: 'date', key: 'date', width: 120 },
               { title: '达人', dataIndex: 'influencer_name', key: 'influencer_name', width: 140 },
               { title: '款项原因', dataIndex: 'reason', key: 'reason', width: 150 },
-              { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatMoney(value) },
+              { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatTravelMoney(value) },
               { title: '备注', dataIndex: 'notes', key: 'notes', render: (value) => value || '-' },
             ]}
           />
@@ -1186,7 +1206,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       columns={[
         { title: '达人名称', dataIndex: 'object_name', key: 'object_name', width: 220 },
         { title: '应收明细数', dataIndex: 'detail_count', key: 'detail_count', width: 120 },
-        { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatMoney(value) },
+        { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatTravelMoney(value) },
       ]}
       expandable={{
         expandedRowRender: (record) => (
@@ -1199,7 +1219,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
               { title: '来源', dataIndex: 'source', key: 'source', width: 130 },
               { title: '日期', dataIndex: 'date', key: 'date', width: 120 },
               { title: '款项原因', dataIndex: 'reason', key: 'reason', width: 150 },
-              { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatMoney(value) },
+              { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatTravelMoney(value) },
               { title: '备注', dataIndex: 'notes', key: 'notes', render: (value) => value || '-' },
             ]}
           />
@@ -1221,16 +1241,16 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const renderTravelHotelReceivableStats = () => (
     <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收达人款项" value={receivableStats.influencerTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收达人款项" value={receivableStats.influencerTotal} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收品牌款项" value={receivableStats.brandTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收品牌款项" value={receivableStats.brandTotal} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收其他款项" value={receivableStats.otherTotal} precision={2} prefix="SGD" />
+        <Statistic title="应收其他款项" value={receivableStats.otherTotal} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
       <Col xs={24} sm={12} lg={6}>
-        <Statistic title="应收合计" value={receivableStats.total} precision={2} prefix="SGD" />
+        <Statistic title="应收合计" value={receivableStats.total} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
     </Row>
   );
@@ -1296,7 +1316,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           </Select>
         </Form.Item>
         <Form.Item name="amount" label="金额" rules={[{ required: true, message: '请填写金额' }]}>
-          <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+          <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
         </Form.Item>
         <Form.Item name="notes" label="款项备注">
           <Input.TextArea rows={3} placeholder="填写应收款项来源、对应达人/品牌、周期或其他说明" />
@@ -1395,16 +1415,16 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={12} lg={6}>
-          <Statistic title="总成本" value={travelFilterStats.totalCost} precision={2} prefix="SGD" />
+          <Statistic title="总成本" value={travelFilterStats.totalCost} precision={2} prefix={TRAVEL_CURRENCY} />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Statistic title="应收" value={travelFilterStats.receivableTotal} precision={2} prefix="SGD" />
+          <Statistic title="应收" value={travelFilterStats.receivableTotal} precision={2} prefix={TRAVEL_CURRENCY} />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Statistic title="已收" value={travelFilterStats.receivedTotal} precision={2} prefix="SGD" valueStyle={{ color: '#237804' }} />
+          <Statistic title="已收" value={travelFilterStats.receivedTotal} precision={2} prefix={TRAVEL_CURRENCY} valueStyle={{ color: '#237804' }} />
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Statistic title="未收" value={travelFilterStats.unreceivedTotal} precision={2} prefix="SGD" valueStyle={{ color: '#cf1322' }} />
+          <Statistic title="未收" value={travelFilterStats.unreceivedTotal} precision={2} prefix={TRAVEL_CURRENCY} valueStyle={{ color: '#cf1322' }} />
         </Col>
       </Row>
     </>
@@ -1413,6 +1433,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const renderTravelCostView = () => (
     <>
       <h2 style={{ margin: '0 0 16px' }}>达人机酒管理</h2>
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Tag color="blue">汇率：1 SGD = {formatExchangeRate(DEFAULT_TRAVEL_EXCHANGE_RATE)} CNY</Tag>
+      </Space>
       {renderTravelFilters()}
       <Tabs
         items={[
@@ -1433,26 +1456,26 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       >
         <Form form={travelCostEditForm} layout="vertical">
           <Form.Item name="flight_cost" label="机票费用">
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={editingTravelCostRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
           </Form.Item>
           <Form.Item name="hotel_cost" label="酒店费用">
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={editingTravelCostRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
           </Form.Item>
           <Form.Item name="business_car_cost" label="商务车费用">
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={editingTravelCostRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
           </Form.Item>
         </Form>
       </Modal>
       <Modal title="新增费用" open={Boolean(receptionRecord)} onOk={saveReceptionCosts} onCancel={() => setReceptionRecord(null)}>
         <Form form={receptionForm} layout="vertical">
           <Form.Item name="taxi_reception_cost" label="接待费用（日常打车)">
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={receptionRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
           </Form.Item>
           <Form.Item name="meal_reception_cost" label="接待费用（日常吃喝)">
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={receptionRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
           </Form.Item>
           <Form.Item name="internal_team_travel_cost" label="内部团队差旅费用（机票+酒店）">
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={receptionRecord?.currency || 'SGD'} onFocus={(event) => event.target.select()} />
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
           </Form.Item>
         </Form>
       </Modal>
@@ -1468,7 +1491,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       >
         <Form form={receivableAmountForm} layout="vertical">
           <Form.Item name="brand_receivable" label="实际应收机酒费用">
-            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={(event) => event.target.select()} />
+            <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
           </Form.Item>
         </Form>
       </Modal>
