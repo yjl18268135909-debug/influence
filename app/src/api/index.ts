@@ -109,6 +109,11 @@ export const travelReceivableApi = {
   delete: (id: number | string) => api.delete(`/travel-receivables/${id}`),
 };
 
+// 汇率相关API
+export const exchangeRateApi = {
+  getSgdToCny: () => api.get('/exchange-rate', { params: { from: 'SGD', to: 'CNY' } }),
+};
+
 // 报表相关API
 export const reportApi = {
   getSummary: (params?: any) => api.get('/reports/summary', { params }),

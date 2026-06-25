@@ -3,7 +3,7 @@ import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Pop
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { liveSessionApi, travelReceivableApi } from '../api';
+import { exchangeRateApi, liveSessionApi, travelReceivableApi } from '../api';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -47,11 +47,11 @@ const readStorage = <T,>(key: string, fallback: T): T => {
 
 const formatMoney = (value: number | string | null | undefined, currency = 'SGD') => `${currency} ${Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const formatTravelMoney = (value: number | string | null | undefined) => formatMoney(value, TRAVEL_CURRENCY);
-const getTravelExchangeRate = (record?: any) => {
+const getTravelExchangeRate = (record?: any, fallbackRate = DEFAULT_TRAVEL_EXCHANGE_RATE) => {
   const rate = Number(record?.exchange_rate || 0);
-  return rate > 1 ? rate : DEFAULT_TRAVEL_EXCHANGE_RATE;
+  return rate > 1 ? rate : fallbackRate;
 };
-const formatTravelSgdMoney = (value: number | string | null | undefined, record?: any) => formatMoney(Number(value || 0) / getTravelExchangeRate(record), TRAVEL_SGD_CURRENCY);
+const formatTravelSgdMoney = (value: number | string | null | undefined, record?: any, fallbackRate = DEFAULT_TRAVEL_EXCHANGE_RATE) => formatMoney(Number(value || 0) / getTravelExchangeRate(record, fallbackRate), TRAVEL_SGD_CURRENCY);
 const formatExchangeRate = (value: number) => Number(value || DEFAULT_TRAVEL_EXCHANGE_RATE).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const hasSessionTime = (value: string | null | undefined) => Boolean(value && /\d{2}:\d{2}/.test(value));
 const formatDateRange = (range?: [Dayjs, Dayjs]) => range ? `${range[0].format('YYYY-MM-DD')} 至 ${range[1].format('YYYY-MM-DD')}` : '-';
@@ -89,6 +89,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingTravelReceivables, setLoadingTravelReceivables] = useState(false);
+  const [loadingExchangeRate, setLoadingExchangeRate] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState(DEFAULT_TRAVEL_EXCHANGE_RATE);
+  const [exchangeRateMeta, setExchangeRateMeta] = useState<any>({ source: '默认汇率', fallback: true });
   const [open, setOpen] = useState(false);
   const [receivableModalOpen, setReceivableModalOpen] = useState(false);
   const [receptionRecord, setReceptionRecord] = useState<any | null>(null);
@@ -112,6 +115,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   useEffect(() => {
     fetchSessions();
     fetchTravelReceivables();
+    fetchExchangeRate();
     const draft = readStorage<any | null>(TRAVEL_COST_DRAFT_STORAGE_KEY, null);
     travelCostForm.setFieldsValue({
       ...(draft ? deserializeTravelCostDraft(draft) : DEFAULT_TRAVEL_COST_FORM_VALUES),
@@ -181,10 +185,31 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     }
   };
 
+  const fetchExchangeRate = async () => {
+    setLoadingExchangeRate(true);
+    try {
+      const res = await exchangeRateApi.getSgdToCny();
+      const data = res.data?.data || {};
+      const nextRate = Number(data.rate || DEFAULT_TRAVEL_EXCHANGE_RATE);
+      const safeRate = nextRate > 0 ? nextRate : DEFAULT_TRAVEL_EXCHANGE_RATE;
+      setExchangeRate(safeRate);
+      setExchangeRateMeta(data);
+      travelCostForm.setFieldValue('exchange_rate', safeRate);
+    } catch (error) {
+      console.error('获取汇率失败:', error);
+      setExchangeRate(DEFAULT_TRAVEL_EXCHANGE_RATE);
+      setExchangeRateMeta({ source: '默认汇率', fallback: true });
+      travelCostForm.setFieldValue('exchange_rate', DEFAULT_TRAVEL_EXCHANGE_RATE);
+      message.warning('获取今日汇率失败，已使用默认汇率');
+    } finally {
+      setLoadingExchangeRate(false);
+    }
+  };
+
   const resetTravelCostDraft = async () => {
     localStorage.removeItem(TRAVEL_COST_DRAFT_STORAGE_KEY);
     travelCostForm.resetFields();
-    travelCostForm.setFieldsValue(DEFAULT_TRAVEL_COST_FORM_VALUES);
+    travelCostForm.setFieldsValue({ ...DEFAULT_TRAVEL_COST_FORM_VALUES, exchange_rate: exchangeRate });
     await fetchSessions();
   };
 
@@ -339,7 +364,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const travelCostSummary = useMemo(() => {
     const values = watchedTravelValues || {};
     const currency = 'CNY';
-    const exchangeRate = getTravelExchangeRate(values);
+    const currentExchangeRate = getTravelExchangeRate(values, exchangeRate);
     const range = values.date_range;
     const influencerName = values.influencer_name;
     const baseCost = ['flight_cost', 'hotel_cost', 'business_car_cost'].reduce((sum, key) => sum + Number(values[key] || 0), 0);
@@ -359,11 +384,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
     return {
       currency,
-      exchangeRate,
+      exchangeRate: currentExchangeRate,
       totalCost,
-      totalCostSgd: totalCost / exchangeRate,
+      totalCostSgd: totalCost / currentExchangeRate,
       flightHotelCost,
-      flightHotelCostSgd: flightHotelCost / exchangeRate,
+      flightHotelCostSgd: flightHotelCost / currentExchangeRate,
       sessionCount: rangeSessions.length,
       tapSessionCount: tapSessions.length,
       perSessionFlightHotelCost: rangeSessions.length ? flightHotelCost / rangeSessions.length : 0,
@@ -403,7 +428,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     setTravelCostRecords((prev) => [record, ...prev]);
     localStorage.removeItem(TRAVEL_COST_DRAFT_STORAGE_KEY);
     travelCostForm.resetFields();
-    travelCostForm.setFieldsValue(DEFAULT_TRAVEL_COST_FORM_VALUES);
+    travelCostForm.setFieldsValue({ ...DEFAULT_TRAVEL_COST_FORM_VALUES, exchange_rate: exchangeRate });
     message.success('达人机酒成本已录入');
   };
 
@@ -863,7 +888,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         { title: '接待打车', dataIndex: 'taxi_reception_cost', key: 'taxi_reception_cost', width: 120, render: (value) => formatTravelMoney(value) },
         { title: '接待吃喝', dataIndex: 'meal_reception_cost', key: 'meal_reception_cost', width: 120, render: (value) => formatTravelMoney(value) },
         { title: '内部团队差旅费用（机票+酒店）', dataIndex: 'internal_team_travel_cost', key: 'internal_team_travel_cost', width: 220, render: (value) => formatTravelMoney(value) },
-        { title: '自动总成本（新币）', key: 'total_cost_sgd', width: 160, render: (_, record) => formatTravelSgdMoney(record.total_cost || getRecordTotalCost(record), record) },
+        { title: '自动总成本（新币）', key: 'total_cost_sgd', width: 160, render: (_, record) => formatTravelSgdMoney(record.total_cost || getRecordTotalCost(record), record, exchangeRate) },
         { title: '自动总成本（人民币）', dataIndex: 'total_cost', key: 'total_cost', width: 170, render: (value, record) => formatTravelMoney(value || getRecordTotalCost(record)) },
         {
           title: '操作',
@@ -1434,7 +1459,13 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     <>
       <h2 style={{ margin: '0 0 16px' }}>达人机酒管理</h2>
       <Space style={{ marginBottom: 16 }} wrap>
-        <Tag color="blue">汇率：1 SGD = {formatExchangeRate(DEFAULT_TRAVEL_EXCHANGE_RATE)} CNY</Tag>
+        <Tag color={exchangeRateMeta?.fallback ? 'orange' : 'blue'}>
+          {exchangeRateMeta?.fallback ? '默认汇率' : '今日汇率'}：1 SGD = {formatExchangeRate(exchangeRate)} CNY
+          {exchangeRateMeta?.date ? `（${exchangeRateMeta.date}）` : ''}
+        </Tag>
+        <Button size="small" icon={<ReloadOutlined />} loading={loadingExchangeRate} onClick={fetchExchangeRate}>
+          刷新汇率
+        </Button>
       </Space>
       {renderTravelFilters()}
       <Tabs

@@ -26,6 +26,8 @@ const intOrNull = (value) => (value ? parseInt(value, 10) : null);
 
 const fullAccessRoles = new Set(['owner', 'finance', '老板', '财务']);
 const ownerRoles = new Set(['owner', '老板']);
+const DEFAULT_SGD_CNY_RATE = 5.35;
+const exchangeRateCache = new Map();
 
 const hasFullAccess = (req) => {
   const role = String(req.get('x-shopfluence-role') || '').trim();
@@ -75,6 +77,54 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
       role: account.role,
     },
   });
+}));
+
+app.get('/api/exchange-rate', asyncRoute(async (req, res) => {
+  const base = String(req.query.from || 'SGD').trim().toUpperCase();
+  const quote = String(req.query.to || 'CNY').trim().toUpperCase();
+  const cacheKey = `${base}_${quote}`;
+  const today = new Date().toISOString().slice(0, 10);
+  const cached = exchangeRateCache.get(cacheKey);
+
+  if (cached?.cacheDate === today) {
+    res.json({ success: true, data: cached.data });
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.frankfurter.dev/v2/rate/${encodeURIComponent(base)}/${encodeURIComponent(quote)}`);
+    if (!response.ok) {
+      throw new Error(`Exchange rate provider responded with ${response.status}`);
+    }
+    const payload = await response.json();
+    const rate = Number(payload.rate);
+    if (!Number.isFinite(rate) || rate <= 0) {
+      throw new Error('Exchange rate provider returned an invalid rate');
+    }
+
+    const data = {
+      base,
+      quote,
+      rate,
+      date: payload.date || today,
+      source: 'Frankfurter',
+      fallback: false,
+    };
+    exchangeRateCache.set(cacheKey, { cacheDate: today, data });
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('获取汇率失败，使用默认汇率:', error.message);
+    const data = {
+      base,
+      quote,
+      rate: DEFAULT_SGD_CNY_RATE,
+      date: today,
+      source: '默认汇率',
+      fallback: true,
+    };
+    exchangeRateCache.set(cacheKey, { cacheDate: today, data });
+    res.json({ success: true, data });
+  }
 }));
 
 app.get('/api/accounts', asyncRoute(async (req, res) => {
