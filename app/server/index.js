@@ -8,6 +8,7 @@ const models = process.env.DATABASE_URL ? require('./models-postgres') : require
 
 const app = express();
 const PORT = process.env.PORT || 5001;
+const HOST = process.env.HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 
 app.use(cors({ origin: process.env.CORS_ORIGIN || true }));
 app.use(bodyParser.json({ limit: '25mb' }));
@@ -384,8 +385,8 @@ if (process.env.NODE_ENV === 'production' && fs.existsSync(distDir)) {
   });
 }
 
-app.listen(PORT, () => {
-  console.log(`服务器运行在 http://localhost:${PORT}`);
+app.listen(PORT, HOST, () => {
+  console.log(`服务器运行在 http://${HOST}:${PORT}`);
   console.log(`数据层: ${process.env.DATABASE_URL ? 'PostgreSQL' : 'SQLite'}`);
-  console.log(`API健康检查: http://localhost:${PORT}/api/health`);
+  console.log(`API健康检查: http://${HOST}:${PORT}/api/health`);
 });
