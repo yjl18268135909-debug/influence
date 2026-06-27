@@ -112,8 +112,8 @@ function getTravelReceivables() {
 function createTravelReceivable(data) {
   const stmt = db.prepare(`
     INSERT INTO travel_receivables
-      (receivable_date, receivable_type, object_name, reason, amount, notes)
-    VALUES (?, ?, ?, ?, ?, ?)
+      (receivable_date, receivable_type, object_name, reason, amount, notes, received_amount, payment_notes, is_bad_debt)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.receivable_date,
@@ -121,7 +121,10 @@ function createTravelReceivable(data) {
     data.object_name || null,
     data.reason || null,
     Number(data.amount || 0),
-    data.notes || null
+    data.notes || null,
+    Number(data.received_amount || 0),
+    data.payment_notes || null,
+    data.is_bad_debt ? 1 : 0
   );
   return db.prepare('SELECT * FROM travel_receivables WHERE id = ?').get(result.lastInsertRowid);
 }
@@ -138,6 +141,9 @@ function updateTravelReceivable(id, data) {
         reason = ?,
         amount = ?,
         notes = ?,
+        received_amount = ?,
+        payment_notes = ?,
+        is_bad_debt = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `).run(
@@ -147,6 +153,9 @@ function updateTravelReceivable(id, data) {
     data.reason || null,
     Number(data.amount || 0),
     data.notes || null,
+    Number(data.received_amount || 0),
+    data.payment_notes || null,
+    data.is_bad_debt ? 1 : 0,
     id
   );
 
@@ -425,9 +434,10 @@ function createLiveSession(data) {
       assistant, live_city, live_venue, live_network, samples, schedule_type, influencer_travel_note, schedule_other_note,
       brand_category, brand_cooperation_mode, plan_notes, execution_notes, cost_notes,
       actual_gmv_sgd, big_screen_screenshot, actual_traffic_usd, screen_traffic_sgd, actual_traffic_provider,
-      traffic_receivable_type, traffic_receivable_amount, traffic_notes, post_live_notes
+      traffic_receivable_type, traffic_receivable_amount, traffic_notes, post_live_notes,
+      received_amount, payment_notes, is_bad_debt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     influencerId,
@@ -470,7 +480,10 @@ function createLiveSession(data) {
     data.traffic_receivable_type || null,
     data.traffic_receivable_amount || 0,
     data.traffic_notes || null,
-    data.post_live_notes || null
+    data.post_live_notes || null,
+    data.received_amount || 0,
+    data.payment_notes || null,
+    data.is_bad_debt ? 1 : 0
   );
   return { id: result.lastInsertRowid, ...data, influencer_id: influencerId, merchant_id: merchantId };
 }
@@ -488,7 +501,7 @@ function updateLiveSession(id, data) {
         brand_category = ?, brand_cooperation_mode = ?, plan_notes = ?, execution_notes = ?, cost_notes = ?,
         actual_gmv_sgd = ?, big_screen_screenshot = ?, actual_traffic_usd = ?, screen_traffic_sgd = ?,
         actual_traffic_provider = ?, traffic_receivable_type = ?, traffic_receivable_amount = ?, traffic_notes = ?,
-        post_live_notes = ?
+        post_live_notes = ?, received_amount = ?, payment_notes = ?, is_bad_debt = ?
     WHERE id = ?
   `);
   stmt.run(
@@ -533,6 +546,9 @@ function updateLiveSession(id, data) {
     data.traffic_receivable_amount || 0,
     data.traffic_notes || null,
     data.post_live_notes || null,
+    data.received_amount || 0,
+    data.payment_notes || null,
+    data.is_bad_debt ? 1 : 0,
     id
   );
   return { id, ...data, influencer_id: influencerId, merchant_id: merchantId };

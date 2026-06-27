@@ -97,6 +97,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [receptionRecord, setReceptionRecord] = useState<any | null>(null);
   const [editingTravelCostRecord, setEditingTravelCostRecord] = useState<any | null>(null);
   const [editingTravelReceivableRecord, setEditingTravelReceivableRecord] = useState<any | null>(null);
+  const [editingCollectionDetail, setEditingCollectionDetail] = useState<any | null>(null);
   const [editingReceivableSession, setEditingReceivableSession] = useState<any | null>(null);
   const [receivedStatus, setReceivedStatus] = useState<Record<string, boolean>>(() => readStorage(TRAVEL_RECEIVED_STATUS_STORAGE_KEY, {}));
   const [calendarMonth, setCalendarMonth] = useState<Dayjs>(dayjs());
@@ -109,6 +110,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [travelReceivableForm] = Form.useForm();
   const [receptionForm] = Form.useForm();
   const [receivableAmountForm] = Form.useForm();
+  const [collectionDetailForm] = Form.useForm();
   const watchedTravelValues = Form.useWatch([], travelCostForm);
   const watchedReceivableType = Form.useWatch('receivable_type', travelReceivableForm);
 
@@ -163,6 +165,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
             reason: item.reason || null,
             amount: item.receivable_type ? Number(item.amount || 0) : getLegacyReceivableAmount(item),
             notes: item.notes || '',
+            received_amount: Number(item.received_amount || 0),
+            payment_notes: item.payment_notes || '',
+            is_bad_debt: Boolean(item.is_bad_debt),
           };
           const created = await travelReceivableApi.create(payload);
           if (created.data?.data) migratedRecords.push(created.data.data);
@@ -321,6 +326,20 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     };
   }, [filteredSessions, filteredTravelCostRecords, receivedStatus]);
 
+  const getLegacyReceivableAmount = (record: any) => (
+    Number(record.influencer_receivable || 0)
+    + Number(record.brand_receivable || 0)
+    + Number(record.other_receivable || 0)
+  );
+
+  const getReceivableAmount = (record: any) => (
+    record.receivable_type ? Number(record.amount || 0) : getLegacyReceivableAmount(record)
+  );
+
+  const isBadDebt = (record: any) => record?.is_bad_debt === true || Number(record?.is_bad_debt) === 1;
+  const getReceivedAmount = (record: any) => Math.min(Number(record?.received_amount || 0), Number(record?.amount || 0));
+  const getOutstandingAmount = (record: any) => Math.max(Number(record?.amount || 0) - getReceivedAmount(record), 0);
+
   const receivableStats = useMemo(() => {
     const influencerTotal = travelReceivableRecords.reduce((sum, item) => {
       if (item.receivable_type) return sum + (item.receivable_type === 'influencer' ? Number(item.amount || 0) : 0);
@@ -338,11 +357,36 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       return sum + Number(item.other_receivable || 0);
     }, 0);
     const brandTotal = manualBrandTotal + sessionBrandTotal;
+    const manualReceivedTotal = travelReceivableRecords.reduce(
+      (sum, item) => sum + Math.min(Number(item.received_amount || 0), getReceivableAmount(item)),
+      0,
+    );
+    const sessionReceivableRecords = sessions
+      .filter((item) => item.schedule_type !== 'travel_note')
+      .filter((item) => Number(item.brand_receivable || 0) > 0);
+    const sessionReceivedTotal = sessionReceivableRecords.reduce(
+      (sum, item) => sum + Math.min(Number(item.received_amount || 0), Number(item.brand_receivable || 0)),
+      0,
+    );
+    const badDebtTotal = travelReceivableRecords.reduce((sum, item) => (
+      isBadDebt(item)
+        ? sum + Math.max(getReceivableAmount(item) - Number(item.received_amount || 0), 0)
+        : sum
+    ), 0) + sessionReceivableRecords.reduce((sum, item) => (
+      isBadDebt(item)
+        ? sum + Math.max(Number(item.brand_receivable || 0) - Number(item.received_amount || 0), 0)
+        : sum
+    ), 0);
+    const total = influencerTotal + brandTotal + otherTotal;
+    const receivedTotal = manualReceivedTotal + sessionReceivedTotal;
     return {
       influencerTotal,
       brandTotal,
       otherTotal,
-      total: influencerTotal + brandTotal + otherTotal,
+      total,
+      receivedTotal,
+      outstandingTotal: Math.max(total - receivedTotal, 0),
+      badDebtTotal,
     };
   }, [travelReceivableRecords, sessions]);
 
@@ -600,6 +644,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         reason,
         amount: Number(values.amount || 0),
         notes: values.notes || '',
+        received_amount: Number(editingTravelReceivableRecord?.received_amount || 0),
+        payment_notes: editingTravelReceivableRecord?.payment_notes || '',
+        is_bad_debt: Boolean(editingTravelReceivableRecord?.is_bad_debt),
       };
       const response = editingTravelReceivableRecord
         ? await travelReceivableApi.update(editingTravelReceivableRecord.id, payload)
@@ -659,15 +706,49 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     [travelReceivableRecords, receivableReasonFilter],
   );
 
-  const getLegacyReceivableAmount = (record: any) => (
-    Number(record.influencer_receivable || 0)
-    + Number(record.brand_receivable || 0)
-    + Number(record.other_receivable || 0)
-  );
+  const openCollectionDetailModal = (detail: any) => {
+    setEditingCollectionDetail(detail);
+    collectionDetailForm.setFieldsValue({
+      received_amount: Number(detail.received_amount || 0),
+      payment_notes: detail.payment_notes || '',
+      is_bad_debt: isBadDebt(detail),
+    });
+  };
 
-  const getReceivableAmount = (record: any) => (
-    record.receivable_type ? Number(record.amount || 0) : getLegacyReceivableAmount(record)
-  );
+  const saveCollectionDetail = async () => {
+    if (!editingCollectionDetail) return;
+    try {
+      const values = await collectionDetailForm.validateFields();
+      const collectionValues = {
+        received_amount: Number(values.received_amount || 0),
+        payment_notes: values.payment_notes || '',
+        is_bad_debt: Boolean(values.is_bad_debt),
+      };
+
+      if (editingCollectionDetail.source_type === 'session') {
+        const sourceRecord = editingCollectionDetail.source_record;
+        await liveSessionApi.update(sourceRecord.id, { ...sourceRecord, ...collectionValues });
+        setSessions((prev) => prev.map((item) => (
+          String(item.id) === String(sourceRecord.id) ? { ...item, ...collectionValues } : item
+        )));
+      } else {
+        const sourceRecord = editingCollectionDetail.source_record;
+        const response = await travelReceivableApi.update(sourceRecord.id, { ...sourceRecord, ...collectionValues });
+        const savedRecord = response.data?.data || { ...sourceRecord, ...collectionValues };
+        setTravelReceivableRecords((prev) => prev.map((item) => (
+          String(item.id) === String(sourceRecord.id) ? savedRecord : item
+        )));
+      }
+
+      setEditingCollectionDetail(null);
+      collectionDetailForm.resetFields();
+      message.success('回款信息已保存');
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      console.error('保存回款信息失败:', error);
+      message.error('保存回款信息失败');
+    }
+  };
 
   const receivableReasonFilterTotal = useMemo(
     () => filteredTravelReceivableRecords.reduce((sum, item) => sum + getReceivableAmount(item), 0),
@@ -688,8 +769,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     const groups = new Map<string, any>();
     const addDetail = (brandName: string, detail: any) => {
       const key = brandName || '未填写品牌';
-      const current = groups.get(key) || { key, object_name: key, total_amount: 0, detail_count: 0, details: [] };
+      const current = groups.get(key) || { key, object_name: key, total_amount: 0, received_amount: 0, outstanding_amount: 0, bad_debt_amount: 0, detail_count: 0, details: [] };
       current.total_amount += Number(detail.amount || 0);
+      current.received_amount += getReceivedAmount(detail);
+      current.outstanding_amount += getOutstandingAmount(detail);
+      if (isBadDebt(detail)) current.bad_debt_amount += getOutstandingAmount(detail);
       current.detail_count += 1;
       current.details.push(detail);
       groups.set(key, current);
@@ -705,6 +789,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           reason: record.reason || '-',
           amount: Number(record.amount || 0),
           notes: record.notes || '-',
+          received_amount: Number(record.received_amount || 0),
+          payment_notes: record.payment_notes || '',
+          is_bad_debt: isBadDebt(record),
+          source_type: 'manual',
+          source_record: record,
         });
         return;
       }
@@ -717,6 +806,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           reason: record.reason || '-',
           amount: Number(record.brand_receivable || 0),
           notes: record.notes || '-',
+          received_amount: Number(record.received_amount || 0),
+          payment_notes: record.payment_notes || '',
+          is_bad_debt: isBadDebt(record),
+          source_type: 'manual',
+          source_record: record,
         });
       }
     });
@@ -733,6 +827,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           reason: '应收机酒成本',
           amount: Number(item.brand_receivable || 0),
           notes: sessionMode(item),
+          received_amount: Number(item.received_amount || 0),
+          payment_notes: item.payment_notes || '',
+          is_bad_debt: isBadDebt(item),
+          source_type: 'session',
+          source_record: item,
         });
       });
 
@@ -743,8 +842,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     const groups = new Map<string, any>();
     const addDetail = (influencerName: string, detail: any) => {
       const key = influencerName || '未填写达人';
-      const current = groups.get(key) || { key, object_name: key, total_amount: 0, detail_count: 0, details: [] };
+      const current = groups.get(key) || { key, object_name: key, total_amount: 0, received_amount: 0, outstanding_amount: 0, bad_debt_amount: 0, detail_count: 0, details: [] };
       current.total_amount += Number(detail.amount || 0);
+      current.received_amount += getReceivedAmount(detail);
+      current.outstanding_amount += getOutstandingAmount(detail);
+      if (isBadDebt(detail)) current.bad_debt_amount += getOutstandingAmount(detail);
       current.detail_count += 1;
       current.details.push(detail);
       groups.set(key, current);
@@ -759,6 +861,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           reason: record.reason || '-',
           amount: Number(record.amount || 0),
           notes: record.notes || '-',
+          received_amount: Number(record.received_amount || 0),
+          payment_notes: record.payment_notes || '',
+          is_bad_debt: isBadDebt(record),
+          source_type: 'manual',
+          source_record: record,
         });
         return;
       }
@@ -770,6 +877,11 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
           reason: record.reason || '-',
           amount: Number(record.influencer_receivable || 0),
           notes: record.notes || '-',
+          received_amount: Number(record.received_amount || 0),
+          payment_notes: record.payment_notes || '',
+          is_bad_debt: isBadDebt(record),
+          source_type: 'manual',
+          source_record: record,
         });
       }
     });
@@ -1200,6 +1312,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         { title: '品牌名称', dataIndex: 'object_name', key: 'object_name', width: 220 },
         { title: '应收明细数', dataIndex: 'detail_count', key: 'detail_count', width: 120 },
         { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatTravelMoney(value) },
+        { title: '已收合计', dataIndex: 'received_amount', key: 'received_amount', width: 160, render: (value) => formatTravelMoney(value) },
+        { title: '剩余未回款', dataIndex: 'outstanding_amount', key: 'outstanding_amount', width: 160, render: (value) => formatTravelMoney(value) },
+        { title: '坏账合计', dataIndex: 'bad_debt_amount', key: 'bad_debt_amount', width: 160, render: (value) => formatTravelMoney(value) },
       ]}
       expandable={{
         expandedRowRender: (record) => (
@@ -1215,7 +1330,13 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
               { title: '款项原因', dataIndex: 'reason', key: 'reason', width: 150 },
               { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatTravelMoney(value) },
               { title: '备注', dataIndex: 'notes', key: 'notes', render: (value) => value || '-' },
+              { title: '已收金额', dataIndex: 'received_amount', key: 'received_amount', width: 140, render: (value) => formatTravelMoney(value) },
+              { title: '剩余未回款', key: 'outstanding_amount', width: 150, render: (_, detail) => formatTravelMoney(getOutstandingAmount(detail)) },
+              { title: '收款备注', dataIndex: 'payment_notes', key: 'payment_notes', width: 180, render: (value) => value || '-' },
+              { title: '是否坏账', dataIndex: 'is_bad_debt', key: 'is_bad_debt', width: 110, render: (_, detail) => isBadDebt(detail) ? <Tag color="red">是</Tag> : <Tag>否</Tag> },
+              { title: '操作', key: 'collection_action', width: 110, fixed: 'right' as const, render: (_, detail) => <Button type="link" icon={<EditOutlined />} onClick={() => openCollectionDetailModal(detail)}>修改</Button> },
             ]}
+            scroll={{ x: 1450 }}
           />
         ),
       }}
@@ -1232,6 +1353,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         { title: '达人名称', dataIndex: 'object_name', key: 'object_name', width: 220 },
         { title: '应收明细数', dataIndex: 'detail_count', key: 'detail_count', width: 120 },
         { title: '应收总额', dataIndex: 'total_amount', key: 'total_amount', width: 160, render: (value) => formatTravelMoney(value) },
+        { title: '已收合计', dataIndex: 'received_amount', key: 'received_amount', width: 160, render: (value) => formatTravelMoney(value) },
+        { title: '剩余未回款', dataIndex: 'outstanding_amount', key: 'outstanding_amount', width: 160, render: (value) => formatTravelMoney(value) },
+        { title: '坏账合计', dataIndex: 'bad_debt_amount', key: 'bad_debt_amount', width: 160, render: (value) => formatTravelMoney(value) },
       ]}
       expandable={{
         expandedRowRender: (record) => (
@@ -1246,7 +1370,13 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
               { title: '款项原因', dataIndex: 'reason', key: 'reason', width: 150 },
               { title: '金额', dataIndex: 'amount', key: 'amount', width: 140, render: (value) => formatTravelMoney(value) },
               { title: '备注', dataIndex: 'notes', key: 'notes', render: (value) => value || '-' },
+              { title: '已收金额', dataIndex: 'received_amount', key: 'received_amount', width: 140, render: (value) => formatTravelMoney(value) },
+              { title: '剩余未回款', key: 'outstanding_amount', width: 150, render: (_, detail) => formatTravelMoney(getOutstandingAmount(detail)) },
+              { title: '收款备注', dataIndex: 'payment_notes', key: 'payment_notes', width: 180, render: (value) => value || '-' },
+              { title: '是否坏账', dataIndex: 'is_bad_debt', key: 'is_bad_debt', width: 110, render: (_, detail) => isBadDebt(detail) ? <Tag color="red">是</Tag> : <Tag>否</Tag> },
+              { title: '操作', key: 'collection_action', width: 110, fixed: 'right' as const, render: (_, detail) => <Button type="link" icon={<EditOutlined />} onClick={() => openCollectionDetailModal(detail)}>修改</Button> },
             ]}
+            scroll={{ x: 1300 }}
           />
         ),
       }}
@@ -1265,19 +1395,76 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
 
   const renderTravelHotelReceivableStats = () => (
     <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-      <Col xs={24} sm={12} lg={6}>
+      <Col xs={24} sm={12} lg={8} xl={6}>
         <Statistic title="应收达人款项" value={receivableStats.influencerTotal} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
-      <Col xs={24} sm={12} lg={6}>
+      <Col xs={24} sm={12} lg={8} xl={6}>
         <Statistic title="应收品牌款项" value={receivableStats.brandTotal} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
-      <Col xs={24} sm={12} lg={6}>
+      <Col xs={24} sm={12} lg={8} xl={6}>
         <Statistic title="应收其他款项" value={receivableStats.otherTotal} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
-      <Col xs={24} sm={12} lg={6}>
+      <Col xs={24} sm={12} lg={8} xl={6}>
         <Statistic title="应收合计" value={receivableStats.total} precision={2} prefix={TRAVEL_CURRENCY} />
       </Col>
+      <Col xs={24} sm={12} lg={8} xl={6}>
+        <Statistic title="已收合计" value={receivableStats.receivedTotal} precision={2} prefix={TRAVEL_CURRENCY} valueStyle={{ color: '#3f8600' }} />
+      </Col>
+      <Col xs={24} sm={12} lg={8} xl={6}>
+        <Statistic title="剩余未回款合计" value={receivableStats.outstandingTotal} precision={2} prefix={TRAVEL_CURRENCY} />
+      </Col>
+      <Col xs={24} sm={12} lg={8} xl={6}>
+        <Statistic title="坏账合计" value={receivableStats.badDebtTotal} precision={2} prefix={TRAVEL_CURRENCY} valueStyle={{ color: '#cf1322' }} />
+      </Col>
     </Row>
+  );
+
+  const renderCollectionDetailModal = () => (
+    <Modal
+      title="修改回款信息"
+      open={Boolean(editingCollectionDetail)}
+      onOk={saveCollectionDetail}
+      onCancel={() => {
+        setEditingCollectionDetail(null);
+        collectionDetailForm.resetFields();
+      }}
+      okText="保存"
+      cancelText="取消"
+      width={620}
+    >
+      <Form form={collectionDetailForm} layout="vertical">
+        <Form.Item
+          name="received_amount"
+          label="已收金额"
+          rules={[
+            { required: true, message: '请输入已收金额' },
+            {
+              validator: (_, value) => Number(value || 0) <= Number(editingCollectionDetail?.amount || 0)
+                ? Promise.resolve()
+                : Promise.reject(new Error('已收金额不能大于应收金额')),
+            },
+          ]}
+        >
+          <InputNumber<number>
+            style={{ width: '100%' }}
+            min={0}
+            max={Number(editingCollectionDetail?.amount || 0)}
+            precision={2}
+            prefix={TRAVEL_CURRENCY}
+            onFocus={(event) => event.target.select()}
+          />
+        </Form.Item>
+        <Form.Item name="payment_notes" label="收款备注">
+          <Input.TextArea rows={3} placeholder="填写收款时间、方式、流水号或其他说明" />
+        </Form.Item>
+        <Form.Item name="is_bad_debt" label="是否坏账" rules={[{ required: true, message: '请选择是否坏账' }]}>
+          <Select>
+            <Option value={false}>否</Option>
+            <Option value={true}>是</Option>
+          </Select>
+        </Form.Item>
+      </Form>
+    </Modal>
   );
 
   const renderTravelReceivableModal = () => (
@@ -1540,6 +1727,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         {renderTravelHotelReceivableStats()}
         {renderReceivableManagementView()}
         {renderTravelReceivableModal()}
+        {renderCollectionDetailModal()}
       </>
     );
   }

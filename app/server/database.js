@@ -142,6 +142,9 @@ function initDatabase() {
   ensureColumn('live_sessions', 'traffic_receivable_amount', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'traffic_notes', 'TEXT');
   ensureColumn('live_sessions', 'post_live_notes', 'TEXT');
+  ensureColumn('live_sessions', 'received_amount', 'REAL DEFAULT 0');
+  ensureColumn('live_sessions', 'payment_notes', 'TEXT');
+  ensureColumn('live_sessions', 'is_bad_debt', 'INTEGER DEFAULT 0');
 
   // 订单表
   db.exec(`
@@ -245,10 +248,16 @@ function initDatabase() {
       reason TEXT,
       amount REAL DEFAULT 0,
       notes TEXT,
+      received_amount REAL DEFAULT 0,
+      payment_notes TEXT,
+      is_bad_debt INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  ensureColumn('travel_receivables', 'received_amount', 'REAL DEFAULT 0');
+  ensureColumn('travel_receivables', 'payment_notes', 'TEXT');
+  ensureColumn('travel_receivables', 'is_bad_debt', 'INTEGER DEFAULT 0');
 
   // 系统账号表
   db.exec(`

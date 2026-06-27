@@ -62,14 +62,26 @@ async function ensureTravelReceivablesTable() {
       reason TEXT,
       amount DOUBLE PRECISION DEFAULT 0,
       notes TEXT,
+      received_amount DOUBLE PRECISION DEFAULT 0,
+      payment_notes TEXT,
+      is_bad_debt BOOLEAN DEFAULT FALSE,
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     )
   `);
+  await query('ALTER TABLE travel_receivables ADD COLUMN IF NOT EXISTS received_amount DOUBLE PRECISION DEFAULT 0');
+  await query('ALTER TABLE travel_receivables ADD COLUMN IF NOT EXISTS payment_notes TEXT');
+  await query('ALTER TABLE travel_receivables ADD COLUMN IF NOT EXISTS is_bad_debt BOOLEAN DEFAULT FALSE');
   await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_date ON travel_receivables(receivable_date)');
   await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_type ON travel_receivables(receivable_type)');
   await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_reason ON travel_receivables(reason)');
   await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
+}
+
+async function ensureLiveSessionCollectionColumns() {
+  await query('ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS received_amount DOUBLE PRECISION DEFAULT 0');
+  await query('ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS payment_notes TEXT');
+  await query('ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS is_bad_debt BOOLEAN DEFAULT FALSE');
 }
 
 async function getAccounts() {
@@ -174,6 +186,9 @@ async function getTravelReceivables() {
       reason,
       COALESCE(amount, 0)::float as amount,
       notes,
+      COALESCE(received_amount, 0)::float as received_amount,
+      payment_notes,
+      COALESCE(is_bad_debt, FALSE) as is_bad_debt,
       created_at,
       updated_at
     FROM travel_receivables
@@ -185,8 +200,8 @@ async function createTravelReceivable(data) {
   await ensureTravelReceivablesTable();
   const row = await one(
     `INSERT INTO travel_receivables
-      (receivable_date, receivable_type, object_name, reason, amount, notes)
-     VALUES ($1,$2,$3,$4,$5,$6)
+      (receivable_date, receivable_type, object_name, reason, amount, notes, received_amount, payment_notes, is_bad_debt)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
      RETURNING
       id,
       to_char(receivable_date, 'YYYY-MM-DD') as receivable_date,
@@ -195,6 +210,9 @@ async function createTravelReceivable(data) {
       reason,
       COALESCE(amount, 0)::float as amount,
       notes,
+      COALESCE(received_amount, 0)::float as received_amount,
+      payment_notes,
+      COALESCE(is_bad_debt, FALSE) as is_bad_debt,
       created_at,
       updated_at`,
     [
@@ -204,6 +222,9 @@ async function createTravelReceivable(data) {
       data.reason || null,
       Number(data.amount || 0),
       data.notes || null,
+      Number(data.received_amount || 0),
+      data.payment_notes || null,
+      Boolean(data.is_bad_debt),
     ]
   );
   return row;
@@ -219,8 +240,11 @@ async function updateTravelReceivable(id, data) {
          reason = $4,
          amount = $5,
          notes = $6,
+         received_amount = $7,
+         payment_notes = $8,
+         is_bad_debt = $9,
          updated_at = CURRENT_TIMESTAMP
-     WHERE id = $7
+     WHERE id = $10
      RETURNING
       id,
       to_char(receivable_date, 'YYYY-MM-DD') as receivable_date,
@@ -229,6 +253,9 @@ async function updateTravelReceivable(id, data) {
       reason,
       COALESCE(amount, 0)::float as amount,
       notes,
+      COALESCE(received_amount, 0)::float as received_amount,
+      payment_notes,
+      COALESCE(is_bad_debt, FALSE) as is_bad_debt,
       created_at,
       updated_at`,
     [
@@ -238,6 +265,9 @@ async function updateTravelReceivable(id, data) {
       data.reason || null,
       Number(data.amount || 0),
       data.notes || null,
+      Number(data.received_amount || 0),
+      data.payment_notes || null,
+      Boolean(data.is_bad_debt),
       id,
     ]
   );
@@ -434,6 +464,7 @@ async function resolveLiveSessionRelations(data) {
 }
 
 async function getLiveSessions(filters = {}) {
+  await ensureLiveSessionCollectionColumns();
   const where = ['1=1'];
   const params = [];
   addFilter(where, params, 'ls.influencer_id = ?', normalizeId(filters.influencer_id));
@@ -464,7 +495,7 @@ const liveSessionColumns = [
   'influencer_travel_note', 'schedule_other_note', 'brand_category', 'brand_cooperation_mode', 'plan_notes',
   'execution_notes', 'cost_notes', 'actual_gmv_sgd', 'big_screen_screenshot', 'actual_traffic_usd',
   'screen_traffic_sgd', 'actual_traffic_provider', 'traffic_receivable_type', 'traffic_receivable_amount',
-  'traffic_notes', 'post_live_notes',
+  'traffic_notes', 'post_live_notes', 'received_amount', 'payment_notes', 'is_bad_debt',
 ];
 
 function liveSessionValues(data, influencerId, merchantId) {
@@ -510,10 +541,14 @@ function liveSessionValues(data, influencerId, merchantId) {
     data.traffic_receivable_amount || 0,
     data.traffic_notes || null,
     data.post_live_notes || null,
+    data.received_amount || 0,
+    data.payment_notes || null,
+    Boolean(data.is_bad_debt),
   ];
 }
 
 async function createLiveSession(data) {
+  await ensureLiveSessionCollectionColumns();
   const { influencerId, merchantId } = await resolveLiveSessionRelations(data);
   const values = liveSessionValues(data, influencerId, merchantId);
   const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
@@ -526,6 +561,7 @@ async function createLiveSession(data) {
 }
 
 async function updateLiveSession(id, data) {
+  await ensureLiveSessionCollectionColumns();
   const { influencerId, merchantId } = await resolveLiveSessionRelations(data);
   const values = liveSessionValues(data, influencerId, merchantId);
   const setSql = liveSessionColumns.map((column, index) => `${column} = $${index + 1}`).join(', ');

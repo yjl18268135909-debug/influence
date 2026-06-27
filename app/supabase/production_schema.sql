@@ -197,9 +197,19 @@ create table if not exists public.travel_receivables (
   reason text,
   amount double precision default 0,
   notes text,
+  received_amount double precision default 0,
+  payment_notes text,
+  is_bad_debt boolean default false,
   created_at timestamptz default current_timestamp,
   updated_at timestamptz default current_timestamp
 );
+
+alter table public.travel_receivables add column if not exists received_amount double precision default 0;
+alter table public.travel_receivables add column if not exists payment_notes text;
+alter table public.travel_receivables add column if not exists is_bad_debt boolean default false;
+alter table public.live_sessions add column if not exists received_amount double precision default 0;
+alter table public.live_sessions add column if not exists payment_notes text;
+alter table public.live_sessions add column if not exists is_bad_debt boolean default false;
 
 create table if not exists public.app_accounts (
   id serial primary key,
