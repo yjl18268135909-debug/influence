@@ -490,11 +490,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
   const getSessionCommissionLine = (item: any) => {
     const influencerCommission = formatCommissionRate(getSessionInfluencerCommissionRate(item));
-    const brandCommission = formatCommissionRate(getSessionBrandCommissionRate(item));
-    return [
-      influencerCommission ? `达人佣金 ${influencerCommission}` : '',
-      brandCommission ? `品牌佣金 ${brandCommission}` : '',
-    ].filter(Boolean).join(' · ');
+    return influencerCommission ? `达人佣金 ${influencerCommission}` : '';
   };
 
   const scrollTimelineToDate = (date: Dayjs) => {
