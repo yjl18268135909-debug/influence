@@ -1,14 +1,23 @@
 const { Pool } = require('pg');
 
-const connectionString = process.env.DATABASE_URL;
+const rawConnectionString = process.env.DATABASE_URL;
 
-if (!connectionString) {
+if (!rawConnectionString) {
   throw new Error('DATABASE_URL is required when using the PostgreSQL data layer');
 }
+
+// Render runs a persistent Node server, so use Supabase's session pooler.
+// Transaction pooling on port 6543 is intended for short-lived/serverless clients.
+const connectionString = rawConnectionString.replace(
+  /(@[^/]*\.pooler\.supabase\.com):6543(?=\/)/,
+  '$1:5432',
+);
 
 const pool = new Pool({
   connectionString,
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+  connectionTimeoutMillis: 10_000,
+  idleTimeoutMillis: 30_000,
 });
 
 async function query(text, params = []) {
