@@ -78,10 +78,44 @@ async function ensureTravelReceivablesTable() {
   await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
 }
 
-async function ensureLiveSessionCollectionColumns() {
-  await query('ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS received_amount DOUBLE PRECISION DEFAULT 0');
-  await query('ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS payment_notes TEXT');
-  await query('ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS is_bad_debt BOOLEAN DEFAULT FALSE');
+async function ensureLiveSessionColumns() {
+  await query(`
+    ALTER TABLE live_sessions
+      ADD COLUMN IF NOT EXISTS cargo_sheet TEXT,
+      ADD COLUMN IF NOT EXISTS traffic_plan TEXT,
+      ADD COLUMN IF NOT EXISTS estimated_ad_cost DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS expected_gmv DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS influencer_commission_rate DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS brand_commission_rate DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS travel_cost_share DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS brand_receivable DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS owner TEXT,
+      ADD COLUMN IF NOT EXISTS assistant TEXT,
+      ADD COLUMN IF NOT EXISTS live_city TEXT,
+      ADD COLUMN IF NOT EXISTS live_venue TEXT,
+      ADD COLUMN IF NOT EXISTS live_network TEXT,
+      ADD COLUMN IF NOT EXISTS samples TEXT,
+      ADD COLUMN IF NOT EXISTS schedule_type TEXT DEFAULT 'session',
+      ADD COLUMN IF NOT EXISTS influencer_travel_note TEXT,
+      ADD COLUMN IF NOT EXISTS schedule_other_note TEXT,
+      ADD COLUMN IF NOT EXISTS brand_category TEXT,
+      ADD COLUMN IF NOT EXISTS brand_cooperation_mode TEXT,
+      ADD COLUMN IF NOT EXISTS plan_notes TEXT,
+      ADD COLUMN IF NOT EXISTS execution_notes TEXT,
+      ADD COLUMN IF NOT EXISTS cost_notes TEXT,
+      ADD COLUMN IF NOT EXISTS actual_gmv_sgd DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS big_screen_screenshot TEXT,
+      ADD COLUMN IF NOT EXISTS actual_traffic_usd DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS screen_traffic_sgd DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS actual_traffic_provider TEXT,
+      ADD COLUMN IF NOT EXISTS traffic_receivable_type TEXT,
+      ADD COLUMN IF NOT EXISTS traffic_receivable_amount DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS traffic_notes TEXT,
+      ADD COLUMN IF NOT EXISTS post_live_notes TEXT,
+      ADD COLUMN IF NOT EXISTS received_amount DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS payment_notes TEXT,
+      ADD COLUMN IF NOT EXISTS is_bad_debt BOOLEAN DEFAULT FALSE
+  `);
 }
 
 async function getAccounts() {
@@ -342,7 +376,7 @@ async function deleteInfluencer(id) {
 }
 
 async function getMerchants(filters = {}) {
-  const where = ["name != '未填写品牌'"];
+  const where = ["name != '未填写品牌'", "COALESCE(status, 'active') != 'deleted'"];
   const params = [];
   addFilter(where, params, 'status = ?', filters.status);
   addFilter(where, params, 'platform = ?', filters.platform);
@@ -424,7 +458,12 @@ async function updateMerchant(id, data) {
 }
 
 async function deleteMerchant(id) {
-  await query('DELETE FROM merchants WHERE id = $1', [id]);
+  // Keep historical sessions and finance records intact while removing the
+  // merchant from active management lists.
+  await query(
+    "UPDATE merchants SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+    [id]
+  );
   return { success: true };
 }
 
@@ -464,7 +503,7 @@ async function resolveLiveSessionRelations(data) {
 }
 
 async function getLiveSessions(filters = {}) {
-  await ensureLiveSessionCollectionColumns();
+  await ensureLiveSessionColumns();
   const where = ['1=1'];
   const params = [];
   addFilter(where, params, 'ls.influencer_id = ?', normalizeId(filters.influencer_id));
@@ -548,7 +587,7 @@ function liveSessionValues(data, influencerId, merchantId) {
 }
 
 async function createLiveSession(data) {
-  await ensureLiveSessionCollectionColumns();
+  await ensureLiveSessionColumns();
   const { influencerId, merchantId } = await resolveLiveSessionRelations(data);
   const values = liveSessionValues(data, influencerId, merchantId);
   const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
@@ -561,7 +600,7 @@ async function createLiveSession(data) {
 }
 
 async function updateLiveSession(id, data) {
-  await ensureLiveSessionCollectionColumns();
+  await ensureLiveSessionColumns();
   const { influencerId, merchantId } = await resolveLiveSessionRelations(data);
   const values = liveSessionValues(data, influencerId, merchantId);
   const setSql = liveSessionColumns.map((column, index) => `${column} = $${index + 1}`).join(', ');

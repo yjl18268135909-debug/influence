@@ -247,7 +247,7 @@ function deleteInfluencer(id) {
 
 // 获取所有商家
 function getMerchants(filters = {}) {
-  let query = "SELECT * FROM merchants WHERE name != '未填写品牌'";
+  let query = "SELECT * FROM merchants WHERE name != '未填写品牌' AND COALESCE(status, 'active') != 'deleted'";
   const params = [];
 
   if (filters.status) {
@@ -341,7 +341,7 @@ function updateMerchant(id, data) {
 
 // 删除商家
 function deleteMerchant(id) {
-  const stmt = db.prepare('DELETE FROM merchants WHERE id = ?');
+  const stmt = db.prepare("UPDATE merchants SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?");
   stmt.run(id);
   return { success: true };
 }

@@ -1031,6 +1031,10 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       const values = await batchForm.validateFields();
       const [startDate, endDate] = values.dateRange;
       const days = endDate.startOf('day').diff(startDate.startOf('day'), 'day') + 1;
+      if (!Number.isFinite(days) || days <= 0) {
+        message.error('结束日期不能早于开始日期');
+        return;
+      }
       const selectedInfluencer = influencers.find((item) => item.id === values.influencer_id || item._id === values.influencer_id);
       const payloads = Array.from({ length: days }, (_, index) => ({
         influencer_id: values.influencer_id,
@@ -1048,7 +1052,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       fetchBaseData();
     } catch (error) {
       console.error('批量新增排期失败:', error);
-      message.error('批量新增失败，请检查日期周期');
+      const detail = (error as any)?.response?.data?.error;
+      message.error(detail ? `批量新增失败：${detail}` : '批量新增失败，请检查日期周期');
     }
   };
 
