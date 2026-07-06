@@ -358,7 +358,7 @@ function getLiveSessions(filters = {}) {
     FROM live_sessions ls
     LEFT JOIN influencers i ON ls.influencer_id = i.id
     LEFT JOIN merchants m ON ls.merchant_id = m.id
-    WHERE 1=1
+    WHERE COALESCE(ls.status, '') != 'deleted'
   `;
   const params = [];
 
@@ -555,7 +555,7 @@ function updateLiveSession(id, data) {
 }
 
 function deleteLiveSession(id) {
-  const stmt = db.prepare('DELETE FROM live_sessions WHERE id = ?');
+  const stmt = db.prepare("UPDATE live_sessions SET status = 'deleted' WHERE id = ?");
   stmt.run(id);
   return { success: true };
 }

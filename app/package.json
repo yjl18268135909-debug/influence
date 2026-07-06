@@ -9,6 +9,7 @@
     "server:start": "node server/index.js",
     "start": "NODE_ENV=production node server/index.js",
     "migrate:prod": "node scripts/migrate-sqlite-to-postgres.js",
+    "test:smoke": "node scripts/smoke-models.js",
     "client:build": "tsc && vite build",
     "build": "tsc && vite build",
     "lint": "eslint .",

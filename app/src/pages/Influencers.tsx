@@ -149,9 +149,9 @@ const Influencers: React.FC = () => {
       }
       setModalVisible(false);
       fetchInfluencers();
-    } catch (error) {
+    } catch (error: any) {
       console.error('操作失败:', error);
-      message.error('操作失败');
+      message.error(error?.response?.data?.error || '操作失败');
     }
   };
 

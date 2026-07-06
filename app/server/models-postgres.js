@@ -513,7 +513,7 @@ async function resolveLiveSessionRelations(data) {
 
 async function getLiveSessions(filters = {}) {
   await ensureLiveSessionColumns();
-  const where = ['1=1'];
+  const where = ["COALESCE(ls.status, '') != 'deleted'"];
   const params = [];
   addFilter(where, params, 'ls.influencer_id = ?', normalizeId(filters.influencer_id));
   addFilter(where, params, 'ls.merchant_id = ?', normalizeId(filters.merchant_id));
@@ -619,7 +619,9 @@ async function updateLiveSession(id, data) {
 }
 
 async function deleteLiveSession(id) {
-  await query('DELETE FROM live_sessions WHERE id = $1', [id]);
+  // Archive instead of physically deleting so orders, costs and receivables
+  // that reference this session remain valid.
+  await query("UPDATE live_sessions SET status = 'deleted' WHERE id = $1", [id]);
   return { success: true };
 }
 

@@ -114,9 +114,9 @@ const Merchants: React.FC = () => {
       }
       setModalVisible(false);
       fetchMerchants();
-    } catch (error) {
+    } catch (error: any) {
       console.error('操作失败:', error);
-      message.error('操作失败');
+      message.error(error?.response?.data?.error || '操作失败');
     }
   };
 

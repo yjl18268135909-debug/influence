@@ -649,30 +649,21 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         return;
       }
 
-      try {
-        if (editingSession?.id) {
-          await liveSessionApi.update(editingSession.id, payload);
-          message.success('直播场次已更新');
-        } else {
-          await liveSessionApi.create(payload);
-          message.success('直播场次创建成功');
-        }
-        fetchBaseData();
-      } catch {
-        if (editingSession?.id) {
-          setSessions((prev) => prev.map((item) => item.id === editingSession.id ? { ...item, ...payload } : item));
-          message.success('直播场次已更新到当前页面');
-        } else {
-          setSessions((prev) => [{ ...payload, id: `local-${Date.now()}` }, ...prev]);
-          message.success('直播场次已添加到当前页面');
-        }
+      if (editingSession?.id) {
+        await liveSessionApi.update(editingSession.id, payload);
+        message.success('直播场次已更新');
+      } else {
+        await liveSessionApi.create(payload);
+        message.success('直播场次创建成功');
       }
+      await fetchBaseData();
 
       setModalVisible(false);
       setEditingSession(null);
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.errorFields) return;
       console.error('操作失败:', error);
-      message.error('请检查必填信息');
+      message.error(error?.response?.data?.error || '保存失败，请检查必填信息');
     }
   };
 
@@ -683,9 +674,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       }
       setSessions((prev) => prev.filter((item) => item.id !== record.id));
       message.success('直播场次已删除');
-    } catch (error) {
+    } catch (error: any) {
       console.error('删除直播场次失败:', error);
-      message.error('删除失败');
+      message.error(error?.response?.data?.error || '删除失败');
     }
   };
 

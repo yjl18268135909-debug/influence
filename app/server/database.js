@@ -2,8 +2,9 @@ const Database = require('better-sqlite3');
 const path = require('path');
 const fs = require('fs');
 
-const dbDir = path.join(__dirname, '../data');
-const dbPath = path.join(dbDir, 'finance.db');
+const defaultDbDir = path.join(__dirname, '../data');
+const dbPath = process.env.DATABASE_PATH || path.join(defaultDbDir, 'finance.db');
+const dbDir = path.dirname(dbPath);
 
 // 确保数据目录存在
 if (!fs.existsSync(dbDir)) {
@@ -207,15 +208,23 @@ function initDatabase() {
       cost_date DATETIME NOT NULL,
       related_influencer_id INTEGER,
       related_merchant_id INTEGER,
+      related_live_session_id INTEGER,
+      related_order_id INTEGER,
       related_product_id INTEGER,
       description TEXT,
+      allocation_method TEXT DEFAULT 'average',
       status TEXT DEFAULT 'confirmed',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (related_influencer_id) REFERENCES influencers(id),
       FOREIGN KEY (related_merchant_id) REFERENCES merchants(id),
+      FOREIGN KEY (related_live_session_id) REFERENCES live_sessions(id),
+      FOREIGN KEY (related_order_id) REFERENCES orders(id),
       FOREIGN KEY (related_product_id) REFERENCES products(id)
     )
   `);
+  ensureColumn('costs', 'related_live_session_id', 'INTEGER');
+  ensureColumn('costs', 'related_order_id', 'INTEGER');
+  ensureColumn('costs', 'allocation_method', "TEXT DEFAULT 'average'");
 
   // 收入表
   db.exec(`
