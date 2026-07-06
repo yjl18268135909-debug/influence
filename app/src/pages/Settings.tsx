@@ -37,6 +37,7 @@ const Settings: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
   const loadAccounts = async () => {
@@ -65,12 +66,13 @@ const Settings: React.FC = () => {
 
   const openEditModal = (account: Account) => {
     setEditingAccount(account);
+    form.resetFields();
     form.setFieldsValue({ ...account, password: '' });
     setModalOpen(true);
   };
 
-  const handleSubmit = async () => {
-    const values = await form.validateFields();
+  const handleSubmit = async (values: any) => {
+    setSaving(true);
     try {
       if (editingAccount) {
         await accountApi.update(editingAccount.id, values);
@@ -84,6 +86,8 @@ const Settings: React.FC = () => {
     } catch (error: any) {
       console.error(error);
       message.error(error.response?.data?.error || '保存账号失败');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -209,12 +213,20 @@ const Settings: React.FC = () => {
         title={editingAccount ? '编辑账号' : '新增账号'}
         open={modalOpen}
         onCancel={() => setModalOpen(false)}
-        onOk={handleSubmit}
+        onOk={() => form.submit()}
         okText="保存"
         cancelText="取消"
+        confirmLoading={saving}
+        okButtonProps={{ htmlType: 'submit' }}
         destroyOnClose
       >
-        <Form form={form} layout="vertical" preserve={false}>
+        <Form
+          form={form}
+          layout="vertical"
+          preserve={false}
+          onFinish={handleSubmit}
+          onFinishFailed={() => message.error('请填写完整的必填项')}
+        >
           <Form.Item
             label="登录账号"
             name="username"
