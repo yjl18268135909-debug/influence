@@ -132,7 +132,8 @@ const Influencers: React.FC = () => {
       fetchInfluencers();
     } catch (error) {
       console.error('删除失败:', error);
-      message.error('删除失败');
+      const detail = (error as any)?.response?.data?.error;
+      message.error(detail ? `删除失败：${detail}` : '删除失败');
     }
   };
 

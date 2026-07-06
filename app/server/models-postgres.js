@@ -315,7 +315,11 @@ async function deleteTravelReceivable(id) {
 }
 
 async function getInfluencers(filters = {}) {
-  const where = ["account NOT LIKE 'placeholder_%'", "account NOT LIKE 'live_%'"];
+  const where = [
+    "account NOT LIKE 'placeholder_%'",
+    "account NOT LIKE 'live_%'",
+    "COALESCE(status, 'active') != 'deleted'",
+  ];
   const params = [];
   addFilter(where, params, 'status = ?', filters.status);
   addFilter(where, params, 'platform = ?', filters.platform);
@@ -371,7 +375,12 @@ async function updateInfluencer(id, data) {
 }
 
 async function deleteInfluencer(id) {
-  await query('DELETE FROM influencers WHERE id = $1', [id]);
+  // Preserve historical sessions and financial records that reference this
+  // influencer while removing them from active management lists.
+  await query(
+    "UPDATE influencers SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = $1",
+    [id]
+  );
   return { success: true };
 }
 

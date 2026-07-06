@@ -171,7 +171,7 @@ function deleteTravelReceivable(id) {
 
 // 获取所有达人
 function getInfluencers(filters = {}) {
-  let query = "SELECT * FROM influencers WHERE account NOT LIKE 'placeholder_%' AND account NOT LIKE 'live_%'";
+  let query = "SELECT * FROM influencers WHERE account NOT LIKE 'placeholder_%' AND account NOT LIKE 'live_%' AND COALESCE(status, 'active') != 'deleted'";
   const params = [];
 
   if (filters.status) {
@@ -238,7 +238,7 @@ function updateInfluencer(id, data) {
 
 // 删除达人
 function deleteInfluencer(id) {
-  const stmt = db.prepare('DELETE FROM influencers WHERE id = ?');
+  const stmt = db.prepare("UPDATE influencers SET status = 'deleted', updated_at = CURRENT_TIMESTAMP WHERE id = ?");
   stmt.run(id);
   return { success: true };
 }
