@@ -17,6 +17,38 @@ const PLATFORM_OPTIONS = [
 
 const COOPERATION_MODE_OPTIONS = ['TAP', 'TSP', '英弗自营', '达播自营'];
 
+const MERCHANT_EXPORT_COLUMNS = [
+  { key: 'id', label: 'ID' },
+  { key: 'name', label: '商家名称', required: true },
+  { key: 'country', label: '国家' },
+  { key: 'merchant_owner', label: '对应负责人' },
+  { key: 'category', label: '商家分类' },
+  { key: 'platform', label: '平台' },
+  { key: 'cooperation_mode', label: '合作模式' },
+  { key: 'has_strong_assistant', label: '是否有强助播' },
+  { key: 'merchant_store', label: '商家店铺' },
+  { key: 'commission_rate', label: '佣金率' },
+  { key: 'supply_price_sheet_url', label: '品牌供货价货盘表' },
+  { key: 'cargo_sheet_url', label: '货盘表' },
+  { key: 'cooperation_notes', label: '合作备注' },
+  { key: 'brand_address', label: '品牌方地址' },
+  { key: 'brand_intro', label: '品牌介绍' },
+  { key: 'brand_assistants', label: '品牌助播' },
+  { key: 'brand_live_venue', label: '品牌直播场地' },
+  { key: 'brand_cards', label: '品牌手卡' },
+  { key: 'other_files', label: '其他文件' },
+  { key: 'contact_person', label: '联系人' },
+  { key: 'email', label: '邮箱' },
+  { key: 'phone', label: '手机' },
+  { key: 'status', label: '状态' },
+  { key: 'notes', label: '备注' },
+  { key: 'company_name', label: '公司名称' },
+  { key: 'settlement_cycle', label: '结算周期' },
+  { key: 'historical_gmv', label: '历史GMV' },
+  { key: 'created_at', label: '创建时间' },
+  { key: 'updated_at', label: '更新时间' },
+];
+
 const normalizeCooperationMode = (mode?: string) => {
   if (mode === '自营') return '英弗自营';
   return mode || '';
@@ -237,6 +269,38 @@ const Merchants: React.FC = () => {
       })
       .reduce((sum, session) => sum + Number(session.actual_gmv_sgd || 0), 0);
   };
+
+  const formatMerchantExportRow = (merchant: Merchant) => ({
+    ID: merchant.id || '',
+    商家名称: merchant.name || '',
+    国家: merchant.country || '',
+    对应负责人: merchant.merchant_owner || '',
+    商家分类: merchant.category || '',
+    平台: normalizePlatforms(merchant.platform).join('/'),
+    合作模式: normalizeCooperationMode(merchant.cooperation_mode) || '',
+    是否有强助播: merchant.has_strong_assistant || '',
+    商家店铺: merchant.merchant_store || '',
+    佣金率: merchant.commission_rate ?? '',
+    品牌供货价货盘表: merchant.supply_price_sheet_url || '',
+    货盘表: merchant.cargo_sheet_url || '',
+    合作备注: merchant.cooperation_notes || '',
+    品牌方地址: merchant.brand_address || '',
+    品牌介绍: merchant.brand_intro || '',
+    品牌助播: merchant.brand_assistants || '',
+    品牌直播场地: merchant.brand_live_venue || '',
+    品牌手卡: merchant.brand_cards || '',
+    其他文件: merchant.other_files || '',
+    联系人: merchant.contact_person || '',
+    邮箱: merchant.email || '',
+    手机: merchant.phone || '',
+    状态: merchant.status || '',
+    备注: merchant.notes || '',
+    公司名称: merchant.company_name || '',
+    结算周期: merchant.settlement_cycle || '',
+    历史GMV: getHistoricalGmv(merchant),
+    创建时间: merchant.created_at || '',
+    更新时间: merchant.updated_at || '',
+  });
 
   const columns: ColumnsType<Merchant> = [
     {
@@ -609,32 +673,7 @@ const Merchants: React.FC = () => {
 
         <DataImportExport
           entityName="商家"
-          templateColumns={[
-            { key: 'name', label: '商家名称', required: true },
-            { key: 'country', label: '国家' },
-            { key: 'merchant_owner', label: '对应负责人' },
-            { key: 'category', label: '商家分类' },
-            { key: 'contact_person', label: '联系人' },
-            { key: 'email', label: '邮箱' },
-            { key: 'phone', label: '手机' },
-            { key: 'supply_price_sheet_url', label: '品牌供货价货盘表' },
-            { key: 'cargo_sheet_url', label: '货盘表' },
-            { key: 'platform', label: '平台' },
-            { key: 'cooperation_mode', label: '合作模式' },
-            { key: 'has_strong_assistant', label: '是否有强助播' },
-            { key: 'merchant_store', label: '商家店铺' },
-            { key: 'cooperation_notes', label: '合作备注' },
-            { key: 'brand_address', label: '品牌方地址' },
-            { key: 'brand_intro', label: '品牌介绍' },
-            { key: 'brand_assistants', label: '品牌助播' },
-            { key: 'brand_live_venue', label: '品牌直播场地' },
-            { key: 'brand_cards', label: '品牌手卡' },
-            { key: 'other_files', label: '其他文件' },
-            { key: 'commission_rate', label: '佣金率' },
-            { key: 'status', label: '状态' },
-            { key: 'notes', label: '备注' },
-            { key: 'company_name', label: '公司名称' }
-          ]}
+          templateColumns={MERCHANT_EXPORT_COLUMNS}
           onImport={async (data) => {
             for (const item of data) {
               await merchantApi.create({
@@ -647,33 +686,7 @@ const Merchants: React.FC = () => {
           onExport={async () => {
             const res = await merchantApi.getAll();
             const data = res.data.data;
-            return Array.isArray(data) ? data.map((merchant: any) => ({
-              ID: merchant.id,
-              商家名称: merchant.name || '',
-              国家: merchant.country || '',
-              对应负责人: merchant.merchant_owner || '',
-              商家分类: merchant.category || '',
-              联系人: merchant.contact_person || '',
-              邮箱: merchant.email || '',
-              手机: merchant.phone || '',
-              品牌供货价货盘表: merchant.supply_price_sheet_url || '',
-              货盘表: merchant.cargo_sheet_url || '',
-              平台: normalizePlatforms(merchant.platform).join('/'),
-              合作模式: merchant.cooperation_mode || '',
-              是否有强助播: merchant.has_strong_assistant || '',
-              商家店铺: merchant.merchant_store || '',
-              合作备注: merchant.cooperation_notes || '',
-              品牌方地址: merchant.brand_address || '',
-              品牌介绍: merchant.brand_intro || '',
-              品牌助播: merchant.brand_assistants || '',
-              品牌直播场地: merchant.brand_live_venue || '',
-              品牌手卡: merchant.brand_cards || '',
-              其他文件: merchant.other_files || '',
-              佣金率: merchant.commission_rate,
-              状态: merchant.status || '',
-              备注: merchant.notes || '',
-              公司名称: merchant.company_name || ''
-            })) : [];
+            return Array.isArray(data) ? data.map(formatMerchantExportRow) : [];
           }}
         />
 

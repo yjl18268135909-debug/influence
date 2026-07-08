@@ -24,7 +24,7 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
 
   // 下载模板
   const handleDownloadTemplate = () => {
-    const templateData = templateColumns.map(() => ({}));
+    const templateData = [{}];
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, '模板');
@@ -32,6 +32,9 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
     // 设置表头
     const header = templateColumns.map(col => col.label);
     XLSX.utils.sheet_add_aoa(ws, [header], { origin: 'A1' });
+    ws['!cols'] = templateColumns.map((col) => ({
+      wch: Math.max(12, Math.min(28, col.label.length * 2 + 4)),
+    }));
 
     XLSX.writeFile(wb, `${entityName}_导入模板.xlsx`);
     message.success('模板下载成功');
