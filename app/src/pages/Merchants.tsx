@@ -15,6 +15,13 @@ const PLATFORM_OPTIONS = [
   { value: 'FB', label: 'FB', color: 'blue' },
 ];
 
+const COOPERATION_MODE_OPTIONS = ['TAP', 'TSP', '英弗自营', '达播自营'];
+
+const normalizeCooperationMode = (mode?: string) => {
+  if (mode === '自营') return '英弗自营';
+  return mode || '';
+};
+
 const normalizePlatforms = (platform?: string | string[]) => {
   const rawValues = Array.isArray(platform)
     ? platform
@@ -168,6 +175,7 @@ const Merchants: React.FC = () => {
       ...record,
       country: record.country ? [record.country] : undefined,
       merchant_owner: record.merchant_owner ? [record.merchant_owner] : undefined,
+      cooperation_mode: normalizeCooperationMode(record.cooperation_mode),
       platform: normalizePlatforms(record.platform),
     });
     setModalVisible(true);
@@ -192,6 +200,7 @@ const Merchants: React.FC = () => {
         ...values,
         country: serializeSingleValue(values.country),
         merchant_owner: serializeSingleValue(values.merchant_owner),
+        cooperation_mode: normalizeCooperationMode(values.cooperation_mode),
         platform: serializePlatforms(values.platform),
       };
       if (editingRecord) {
@@ -307,12 +316,9 @@ const Merchants: React.FC = () => {
       key: 'cooperation_mode',
       width: 110,
       fixed: 'left',
-      render: (value: string) => value || '未填写',
-      filters: [
-        { text: 'TAP', value: 'TAP' },
-        { text: '自营', value: '自营' },
-        { text: 'TSP', value: 'TSP' },
-      ],
+      render: (value: string) => normalizeCooperationMode(value) || '未填写',
+      filters: COOPERATION_MODE_OPTIONS.map((mode) => ({ text: mode, value: mode })),
+      onFilter: (value, record) => normalizeCooperationMode(record.cooperation_mode) === value,
     },
     {
       title: '是否有强助播',
@@ -743,9 +749,9 @@ const Merchants: React.FC = () => {
           </Form.Item>
           <Form.Item name="cooperation_mode" label="合作模式">
             <Select placeholder="请选择合作模式" allowClear>
-              <Option value="TAP">TAP</Option>
-              <Option value="自营">自营</Option>
-              <Option value="TSP">TSP</Option>
+              {COOPERATION_MODE_OPTIONS.map((mode) => (
+                <Option key={mode} value={mode}>{mode}</Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item name="has_strong_assistant" label="是否有强助播">
