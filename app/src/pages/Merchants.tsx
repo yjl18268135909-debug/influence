@@ -145,6 +145,7 @@ const Merchants: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<Merchant | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
@@ -217,11 +218,30 @@ const Merchants: React.FC = () => {
     try {
       await merchantApi.delete(id);
       message.success('删除成功');
+      setSelectedRowKeys((prev) => prev.filter((key) => String(key) !== String(id)));
       fetchMerchants();
     } catch (error) {
       console.error('删除失败:', error);
       const detail = (error as any)?.response?.data?.error;
       message.error(detail ? `删除失败：${detail}` : '删除失败');
+    }
+  };
+
+  const handleBatchDelete = async () => {
+    if (selectedRowKeys.length === 0) {
+      message.warning('请先勾选要删除的商家');
+      return;
+    }
+
+    try {
+      await Promise.all(selectedRowKeys.map((id) => merchantApi.delete(Number(id))));
+      message.success(`已删除 ${selectedRowKeys.length} 个商家`);
+      setSelectedRowKeys([]);
+      fetchMerchants();
+    } catch (error) {
+      console.error('批量删除失败:', error);
+      const detail = (error as any)?.response?.data?.error;
+      message.error(detail ? `批量删除失败：${detail}` : '批量删除失败');
     }
   };
 
@@ -669,6 +689,22 @@ const Merchants: React.FC = () => {
           >
             刷新
           </Button>
+          <Popconfirm
+            title="确认批量删除"
+            description={`确定要删除已勾选的 ${selectedRowKeys.length} 个商家吗？`}
+            onConfirm={handleBatchDelete}
+            okText="确定"
+            cancelText="取消"
+            disabled={selectedRowKeys.length === 0}
+          >
+            <Button
+              danger
+              icon={<DeleteOutlined />}
+              disabled={selectedRowKeys.length === 0}
+            >
+              批量删除{selectedRowKeys.length ? `（${selectedRowKeys.length}）` : ''}
+            </Button>
+          </Popconfirm>
         </Space>
 
         <DataImportExport
@@ -695,6 +731,11 @@ const Merchants: React.FC = () => {
           dataSource={filteredMerchants}
           rowKey="id"
           loading={loading}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+            preserveSelectedRowKeys: true,
+          }}
           scroll={{ x: 2200 }}
           pagination={{
             showSizeChanger: true,
