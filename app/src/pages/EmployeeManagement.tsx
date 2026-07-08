@@ -21,7 +21,6 @@ interface Employee {
   role: string;
   hireDate?: string;
   phone?: string;
-  commissionRate: number;
   status: string;
 }
 
@@ -247,7 +246,7 @@ const EmployeeManagement: React.FC = () => {
   const openCreateEmployeeModal = () => {
     setEditingEmployee(null);
     employeeForm.resetFields();
-    employeeForm.setFieldsValue({ commissionRate: 0, status: 'active' });
+    employeeForm.setFieldsValue({ status: 'active' });
     setEmployeeModalOpen(true);
   };
 
@@ -541,7 +540,6 @@ const EmployeeManagement: React.FC = () => {
                   { title: '实际出勤', key: 'actualAttendance', render: (_, record) => employeeStats.find((item) => item.id === record.id)?.actualAttendance ?? 0 },
                   { title: '实际休假', key: 'actualLeave', render: (_, record) => employeeStats.find((item) => item.id === record.id)?.actualLeave ?? 0 },
                   { title: '联系方式', dataIndex: 'phone', key: 'phone', render: (value) => value || '-' },
-                  { title: '提成比例', dataIndex: 'commissionRate', key: 'commissionRate', render: (value) => `${(Number(value || 0) * 100).toFixed(2)}%` },
                   { title: '状态', dataIndex: 'status', key: 'status', render: (value) => <Tag color={value === 'active' ? 'green' : 'default'}>{value === 'active' ? '在职' : '停用'}</Tag> },
                   {
                     title: '操作',
@@ -664,7 +662,7 @@ const EmployeeManagement: React.FC = () => {
         setEmployeeModalOpen(false);
         setEditingEmployee(null);
       }}>
-        <Form form={employeeForm} layout="vertical" initialValues={{ commissionRate: 0, status: 'active' }}>
+        <Form form={employeeForm} layout="vertical" initialValues={{ status: 'active' }}>
           <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}><Input /></Form.Item>
           <Form.Item name="role" label="岗位" rules={[{ required: true, message: '请选择岗位' }]}>
             <Select mode="tags" maxCount={1} placeholder="请选择或新增岗位">
@@ -676,9 +674,6 @@ const EmployeeManagement: React.FC = () => {
           </Form.Item>
           <Form.Item name="hireDate" label="入职时间"><DatePicker style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="phone" label="联系方式"><Input /></Form.Item>
-          <Form.Item name="commissionRate" label="提成比例">
-            <InputNumber<number> min={0} max={1} step={0.005} style={{ width: '100%' }} formatter={(value) => `${Number(value || 0) * 100}%`} parser={(value) => Number(value?.replace('%', '')) / 100} onFocus={(event) => event.target.select()} />
-          </Form.Item>
           <Form.Item name="status" label="状态"><Select><Option value="active">在职</Option><Option value="inactive">停用</Option></Select></Form.Item>
         </Form>
       </Modal>
