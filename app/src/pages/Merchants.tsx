@@ -8,9 +8,56 @@ import DataImportExport from '../components/DataImportExport';
 
 const { Option } = Select;
 
+const PLATFORM_OPTIONS = [
+  { value: 'TK', label: 'TK', color: 'red' },
+  { value: 'SP', label: 'SP', color: 'orange' },
+  { value: 'FB', label: 'FB', color: 'blue' },
+];
+
+const normalizePlatforms = (platform?: string | string[]) => {
+  const rawValues = Array.isArray(platform)
+    ? platform
+    : String(platform || '')
+      .split(/[,/、，]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+  const mapped = rawValues.flatMap((item) => {
+    if (item === 'Both' || item === '双平台') return ['TK', 'SP'];
+    if (item === 'TikTok') return ['TK'];
+    if (item === 'Shopee') return ['SP'];
+    return [item];
+  });
+
+  return Array.from(new Set(mapped.filter((item) => PLATFORM_OPTIONS.some((option) => option.value === item))));
+};
+
+const serializePlatforms = (platform?: string | string[]) => normalizePlatforms(platform).join(',');
+
+const serializeSingleValue = (value?: string | string[]) => {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+};
+
+const renderPlatformTags = (platform?: string | string[]) => {
+  const platforms = normalizePlatforms(platform);
+
+  if (platforms.length === 0) return '未填写';
+
+  return platforms.map((value) => {
+    const option = PLATFORM_OPTIONS.find((item) => item.value === value);
+    return (
+      <Tag key={value} color={option?.color || 'default'}>
+        {option?.label || value}
+      </Tag>
+    );
+  });
+};
+
 interface Merchant {
   id: number;
   name: string;
+  country?: string;
   platform: string;
   category: string;
   contact_person: string;
@@ -31,6 +78,8 @@ interface Merchant {
   brand_cards?: string;
   other_files?: string;
   company_name?: string;
+  has_strong_assistant?: string;
+  merchant_store?: string;
   created_at: string;
   updated_at: string;
 }
@@ -40,7 +89,7 @@ const Merchants: React.FC = () => {
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [platformFilter, setPlatformFilter] = useState<string>('all');
+  const [platformFilter, setPlatformFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modalVisible, setModalVisible] = useState(false);
@@ -78,6 +127,8 @@ const Merchants: React.FC = () => {
     form.resetFields();
     form.setFieldsValue({
       category: '服装',
+      platform: [],
+      has_strong_assistant: undefined,
       commission_rate: 0.1,
       status: 'active'
     });
@@ -86,7 +137,11 @@ const Merchants: React.FC = () => {
 
   const handleEdit = (record: Merchant) => {
     setEditingRecord(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue({
+      ...record,
+      country: record.country ? [record.country] : undefined,
+      platform: normalizePlatforms(record.platform),
+    });
     setModalVisible(true);
   };
 
@@ -105,11 +160,16 @@ const Merchants: React.FC = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      const payload = {
+        ...values,
+        country: serializeSingleValue(values.country),
+        platform: serializePlatforms(values.platform),
+      };
       if (editingRecord) {
-        await merchantApi.update(editingRecord.id, values);
+        await merchantApi.update(editingRecord.id, payload);
         message.success('更新成功');
       } else {
-        await merchantApi.create(values);
+        await merchantApi.create(payload);
         message.success('创建成功');
       }
       setModalVisible(false);
@@ -124,7 +184,8 @@ const Merchants: React.FC = () => {
     const matchSearch = item.name.toLowerCase().includes(searchText.toLowerCase()) ||
                        item.contact_person.toLowerCase().includes(searchText.toLowerCase()) ||
                        (item.email && item.email.toLowerCase().includes(searchText.toLowerCase()));
-    const matchPlatform = platformFilter === 'all' || item.platform === platformFilter;
+    const itemPlatforms = normalizePlatforms(item.platform);
+    const matchPlatform = platformFilter.length === 0 || platformFilter.some((platform) => itemPlatforms.includes(platform));
     const matchCategory = categoryFilter === 'all' || item.category === categoryFilter;
     const matchStatus = statusFilter === 'all' || item.status === statusFilter;
     return matchSearch && matchPlatform && matchCategory && matchStatus;
@@ -154,6 +215,19 @@ const Merchants: React.FC = () => {
       width: 140,
       fixed: 'left',
       sorter: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      title: '国家',
+      dataIndex: 'country',
+      key: 'country',
+      width: 100,
+      render: (value?: string) => value || '未填写',
+      filters: [
+        { text: '中国', value: '中国' },
+        { text: '日本', value: '日本' },
+        { text: '韩国', value: '韩国' },
+      ],
+      onFilter: (value, record) => record.country === value,
     },
     {
       title: '商家分类',
@@ -187,16 +261,9 @@ const Merchants: React.FC = () => {
       key: 'platform',
       width: 110,
       fixed: 'left',
-      render: (platform: string) => (
-        <Tag color={platform === 'TikTok' ? 'red' : platform === 'Shopee' ? 'orange' : 'green'}>
-          {platform ? (platform === 'Both' ? '双平台' : platform) : '未填写'}
-        </Tag>
-      ),
-      filters: [
-        { text: 'TikTok', value: 'TikTok' },
-        { text: 'Shopee', value: 'Shopee' },
-        { text: '双平台', value: 'Both' },
-      ],
+      render: renderPlatformTags,
+      filters: PLATFORM_OPTIONS.map((option) => ({ text: option.label, value: option.value })),
+      onFilter: (value, record) => normalizePlatforms(record.platform).includes(String(value)),
     },
     {
       title: '合作模式',
@@ -210,6 +277,27 @@ const Merchants: React.FC = () => {
         { text: '自营', value: '自营' },
         { text: 'TSP', value: 'TSP' },
       ],
+    },
+    {
+      title: '是否有强助播',
+      dataIndex: 'has_strong_assistant',
+      key: 'has_strong_assistant',
+      width: 130,
+      render: (value?: string) => value ? (
+        <Tag color={value === '是' ? 'green' : 'default'}>{value}</Tag>
+      ) : '未填写',
+      filters: [
+        { text: '是', value: '是' },
+        { text: '否', value: '否' },
+      ],
+      onFilter: (value, record) => record.has_strong_assistant === value,
+    },
+    {
+      title: '商家店铺',
+      dataIndex: 'merchant_store',
+      key: 'merchant_store',
+      width: 140,
+      render: (value?: string) => value || '未填写',
     },
     {
       title: '佣金率',
@@ -345,8 +433,9 @@ const Merchants: React.FC = () => {
   // 计算统计数据
   const totalMerchants = merchants.length;
   const activeMerchants = merchants.filter(m => m.status === 'active').length;
-  const tiktokMerchants = merchants.filter(m => m.platform === 'TikTok' || m.platform === 'Both').length;
-  const shopeeMerchants = merchants.filter(m => m.platform === 'Shopee' || m.platform === 'Both').length;
+  const tkMerchants = merchants.filter(m => normalizePlatforms(m.platform).includes('TK')).length;
+  const spMerchants = merchants.filter(m => normalizePlatforms(m.platform).includes('SP')).length;
+  const fbMerchants = merchants.filter(m => normalizePlatforms(m.platform).includes('FB')).length;
 
   // 按分类统计
   const categoryStats = merchants.reduce((acc, m) => {
@@ -386,8 +475,8 @@ const Merchants: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="TikTok商家"
-              value={tiktokMerchants}
+              title="TK商家"
+              value={tkMerchants}
               valueStyle={{ color: '#ff0050' }}
             />
           </Card>
@@ -395,9 +484,18 @@ const Merchants: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
-              title="Shopee商家"
-              value={shopeeMerchants}
+              title="SP商家"
+              value={spMerchants}
               valueStyle={{ color: '#ee4d2d' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="FB商家"
+              value={fbMerchants}
+              valueStyle={{ color: '#1677ff' }}
             />
           </Card>
         </Col>
@@ -417,13 +515,14 @@ const Merchants: React.FC = () => {
             placeholder="平台筛选"
             value={platformFilter}
             onChange={setPlatformFilter}
-            style={{ width: 120 }}
+            mode="multiple"
+            maxTagCount="responsive"
+            style={{ width: 180 }}
             allowClear
           >
-            <Option value="all">所有平台</Option>
-            <Option value="TikTok">TikTok</Option>
-            <Option value="Shopee">Shopee</Option>
-            <Option value="Both">双平台</Option>
+            {PLATFORM_OPTIONS.map((option) => (
+              <Option key={option.value} value={option.value}>{option.label}</Option>
+            ))}
           </Select>
           <Select
             placeholder="分类筛选"
@@ -470,6 +569,7 @@ const Merchants: React.FC = () => {
           entityName="商家"
           templateColumns={[
             { key: 'name', label: '商家名称', required: true },
+            { key: 'country', label: '国家' },
             { key: 'category', label: '商家分类' },
             { key: 'contact_person', label: '联系人' },
             { key: 'email', label: '邮箱' },
@@ -478,8 +578,15 @@ const Merchants: React.FC = () => {
             { key: 'cargo_sheet_url', label: '货盘表' },
             { key: 'platform', label: '平台' },
             { key: 'cooperation_mode', label: '合作模式' },
+            { key: 'has_strong_assistant', label: '是否有强助播' },
+            { key: 'merchant_store', label: '商家店铺' },
             { key: 'cooperation_notes', label: '合作备注' },
             { key: 'brand_address', label: '品牌方地址' },
+            { key: 'brand_intro', label: '品牌介绍' },
+            { key: 'brand_assistants', label: '品牌助播' },
+            { key: 'brand_live_venue', label: '品牌直播场地' },
+            { key: 'brand_cards', label: '品牌手卡' },
+            { key: 'other_files', label: '其他文件' },
             { key: 'commission_rate', label: '佣金率' },
             { key: 'status', label: '状态' },
             { key: 'notes', label: '备注' },
@@ -487,14 +594,42 @@ const Merchants: React.FC = () => {
           ]}
           onImport={async (data) => {
             for (const item of data) {
-              await merchantApi.create(item);
+              await merchantApi.create({
+                ...item,
+                platform: serializePlatforms(item.platform),
+              });
             }
             fetchMerchants();
           }}
           onExport={async () => {
             const res = await merchantApi.getAll();
             const data = res.data.data;
-            return Array.isArray(data) ? data : [];
+            return Array.isArray(data) ? data.map((merchant: any) => ({
+              ID: merchant.id,
+              商家名称: merchant.name || '',
+              国家: merchant.country || '',
+              商家分类: merchant.category || '',
+              联系人: merchant.contact_person || '',
+              邮箱: merchant.email || '',
+              手机: merchant.phone || '',
+              品牌供货价货盘表: merchant.supply_price_sheet_url || '',
+              货盘表: merchant.cargo_sheet_url || '',
+              平台: normalizePlatforms(merchant.platform).join('/'),
+              合作模式: merchant.cooperation_mode || '',
+              是否有强助播: merchant.has_strong_assistant || '',
+              商家店铺: merchant.merchant_store || '',
+              合作备注: merchant.cooperation_notes || '',
+              品牌方地址: merchant.brand_address || '',
+              品牌介绍: merchant.brand_intro || '',
+              品牌助播: merchant.brand_assistants || '',
+              品牌直播场地: merchant.brand_live_venue || '',
+              品牌手卡: merchant.brand_cards || '',
+              其他文件: merchant.other_files || '',
+              佣金率: merchant.commission_rate,
+              状态: merchant.status || '',
+              备注: merchant.notes || '',
+              公司名称: merchant.company_name || ''
+            })) : [];
           }}
         />
 
@@ -526,6 +661,13 @@ const Merchants: React.FC = () => {
           >
             <Input placeholder="请输入商家名称" />
           </Form.Item>
+          <Form.Item name="country" label="国家">
+            <Select placeholder="请选择或输入国家" allowClear showSearch mode="tags" maxCount={1}>
+              <Option value="中国">中国</Option>
+              <Option value="日本">日本</Option>
+              <Option value="韩国">韩国</Option>
+            </Select>
+          </Form.Item>
           <Form.Item
             name="category"
             label="商家分类"
@@ -544,10 +686,10 @@ const Merchants: React.FC = () => {
             name="platform"
             label="平台"
           >
-            <Select placeholder="请选择平台" allowClear>
-              <Option value="TikTok">TikTok</Option>
-              <Option value="Shopee">Shopee</Option>
-              <Option value="Both">双平台</Option>
+            <Select mode="multiple" placeholder="请选择平台" allowClear>
+              {PLATFORM_OPTIONS.map((option) => (
+                <Option key={option.value} value={option.value}>{option.label}</Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item name="cooperation_mode" label="合作模式">
@@ -556,6 +698,15 @@ const Merchants: React.FC = () => {
               <Option value="自营">自营</Option>
               <Option value="TSP">TSP</Option>
             </Select>
+          </Form.Item>
+          <Form.Item name="has_strong_assistant" label="是否有强助播">
+            <Select placeholder="请选择是否有强助播" allowClear>
+              <Option value="是">是</Option>
+              <Option value="否">否</Option>
+            </Select>
+          </Form.Item>
+          <Form.Item name="merchant_store" label="商家店铺">
+            <Input placeholder="请输入商家店铺名称或链接" />
           </Form.Item>
           <Form.Item
             name="commission_rate"

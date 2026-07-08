@@ -109,6 +109,14 @@ export const travelReceivableApi = {
   delete: (id: number | string) => api.delete(`/travel-receivables/${id}`),
 };
 
+// 工作推进相关API
+export const workProgressApi = {
+  getAll: (params?: any) => api.get('/work-progress', { params }),
+  create: (data: any) => api.post('/work-progress', data),
+  update: (id: number | string, data: any) => api.put(`/work-progress/${id}`, data),
+  delete: (id: number | string) => api.delete(`/work-progress/${id}`),
+};
+
 // 汇率相关API
 export const exchangeRateApi = {
   getSgdToCny: () => api.get('/exchange-rate', { params: { from: 'SGD', to: 'CNY' } }),

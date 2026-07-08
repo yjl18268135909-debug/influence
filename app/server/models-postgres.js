@@ -78,6 +78,32 @@ async function ensureTravelReceivablesTable() {
   await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
 }
 
+async function ensureWorkProgressTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS work_progress_items (
+      id SERIAL PRIMARY KEY,
+      fill_time TIMESTAMPTZ NOT NULL,
+      required_finish_time TIMESTAMPTZ,
+      urgency TEXT DEFAULT '需要',
+      urgency_note TEXT,
+      requester TEXT,
+      executor_role TEXT,
+      requirement TEXT NOT NULL,
+      executor_ack TEXT DEFAULT '否',
+      is_done TEXT DEFAULT '否',
+      finished_at TIMESTAMPTZ,
+      completion_link TEXT,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await query('CREATE INDEX IF NOT EXISTS idx_work_progress_fill_time ON work_progress_items(fill_time)');
+  await query('CREATE INDEX IF NOT EXISTS idx_work_progress_required_time ON work_progress_items(required_finish_time)');
+  await query('CREATE INDEX IF NOT EXISTS idx_work_progress_urgency ON work_progress_items(urgency)');
+  await query('CREATE INDEX IF NOT EXISTS idx_work_progress_done ON work_progress_items(is_done)');
+}
+
 async function ensureLiveSessionColumns() {
   await query(`
     ALTER TABLE live_sessions
@@ -115,6 +141,15 @@ async function ensureLiveSessionColumns() {
       ADD COLUMN IF NOT EXISTS received_amount DOUBLE PRECISION DEFAULT 0,
       ADD COLUMN IF NOT EXISTS payment_notes TEXT,
       ADD COLUMN IF NOT EXISTS is_bad_debt BOOLEAN DEFAULT FALSE
+  `);
+}
+
+async function ensureMerchantColumns() {
+  await query(`
+    ALTER TABLE merchants
+      ADD COLUMN IF NOT EXISTS has_strong_assistant TEXT,
+      ADD COLUMN IF NOT EXISTS merchant_store TEXT,
+      ADD COLUMN IF NOT EXISTS country TEXT
   `);
 }
 
@@ -180,6 +215,8 @@ async function deleteAccount(id) {
 async function exportAllData() {
   await ensureAccountsTable();
   await ensureTravelReceivablesTable();
+  await ensureWorkProgressTable();
+  await ensureMerchantColumns();
   const tables = [
     'influencers',
     'merchants',
@@ -190,6 +227,7 @@ async function exportAllData() {
     'costs',
     'income',
     'travel_receivables',
+    'work_progress_items',
   ];
 
   const data = {};
@@ -207,6 +245,183 @@ async function exportAllData() {
     database: 'postgres',
     data,
   };
+}
+
+async function getWorkProgressItems(filters = {}) {
+  await ensureWorkProgressTable();
+  const where = ['1=1'];
+  const params = [];
+  addFilter(where, params, 'urgency = ?', filters.urgency);
+  addFilter(where, params, 'requester = ?', filters.requester);
+  addFilter(where, params, 'executor_role = ?', filters.executor_role);
+  addFilter(where, params, 'executor_ack = ?', filters.executor_ack);
+  addFilter(where, params, 'is_done = ?', filters.is_done);
+
+  if (filters.startDate && filters.endDate) {
+    params.push(filters.startDate, filters.endDate);
+    where.push(`fill_time::date BETWEEN $${params.length - 1}::date AND $${params.length}::date`);
+  }
+
+  if (filters.keyword) {
+    params.push(`%${filters.keyword}%`);
+    where.push(`(
+      requester ILIKE $${params.length}
+      OR executor_role ILIKE $${params.length}
+      OR requirement ILIKE $${params.length}
+      OR notes ILIKE $${params.length}
+    )`);
+  }
+
+  return query(
+    `SELECT
+      id,
+      to_char(fill_time, 'YYYY-MM-DD HH24:MI:SS') as fill_time,
+      to_char(required_finish_time, 'YYYY-MM-DD HH24:MI:SS') as required_finish_time,
+      urgency,
+      urgency_note,
+      requester,
+      executor_role,
+      requirement,
+      executor_ack,
+      is_done,
+      to_char(finished_at, 'YYYY-MM-DD HH24:MI:SS') as finished_at,
+      completion_link,
+      notes,
+      created_at,
+      updated_at
+     FROM work_progress_items
+     WHERE ${where.join(' AND ')}
+     ORDER BY COALESCE(required_finish_time, fill_time) ASC, id DESC`,
+    params
+  );
+}
+
+function normalizeWorkProgressPayload(data) {
+  return {
+    fill_time: data.fill_time,
+    required_finish_time: data.required_finish_time || null,
+    urgency: data.urgency || '需要',
+    urgency_note: data.urgency_note || null,
+    requester: data.requester || null,
+    executor_role: data.executor_role || null,
+    requirement: data.requirement,
+    executor_ack: data.executor_ack || '否',
+    is_done: data.is_done || '否',
+    finished_at: data.finished_at || null,
+    completion_link: data.completion_link || null,
+    notes: data.notes || null,
+  };
+}
+
+async function createWorkProgressItem(data) {
+  await ensureWorkProgressTable();
+  const item = normalizeWorkProgressPayload(data);
+  return one(
+    `INSERT INTO work_progress_items (
+      fill_time,
+      required_finish_time,
+      urgency,
+      urgency_note,
+      requester,
+      executor_role,
+      requirement,
+      executor_ack,
+      is_done,
+      finished_at,
+      completion_link,
+      notes
+    )
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+    RETURNING
+      id,
+      to_char(fill_time, 'YYYY-MM-DD HH24:MI:SS') as fill_time,
+      to_char(required_finish_time, 'YYYY-MM-DD HH24:MI:SS') as required_finish_time,
+      urgency,
+      urgency_note,
+      requester,
+      executor_role,
+      requirement,
+      executor_ack,
+      is_done,
+      to_char(finished_at, 'YYYY-MM-DD HH24:MI:SS') as finished_at,
+      completion_link,
+      notes,
+      created_at,
+      updated_at`,
+    [
+      item.fill_time,
+      item.required_finish_time,
+      item.urgency,
+      item.urgency_note,
+      item.requester,
+      item.executor_role,
+      item.requirement,
+      item.executor_ack,
+      item.is_done,
+      item.finished_at,
+      item.completion_link,
+      item.notes,
+    ]
+  );
+}
+
+async function updateWorkProgressItem(id, data) {
+  await ensureWorkProgressTable();
+  const item = normalizeWorkProgressPayload(data);
+  return one(
+    `UPDATE work_progress_items
+     SET fill_time = $1,
+         required_finish_time = $2,
+         urgency = $3,
+         urgency_note = $4,
+         requester = $5,
+         executor_role = $6,
+         requirement = $7,
+         executor_ack = $8,
+         is_done = $9,
+         finished_at = $10,
+         completion_link = $11,
+         notes = $12,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $13
+     RETURNING
+      id,
+      to_char(fill_time, 'YYYY-MM-DD HH24:MI:SS') as fill_time,
+      to_char(required_finish_time, 'YYYY-MM-DD HH24:MI:SS') as required_finish_time,
+      urgency,
+      urgency_note,
+      requester,
+      executor_role,
+      requirement,
+      executor_ack,
+      is_done,
+      to_char(finished_at, 'YYYY-MM-DD HH24:MI:SS') as finished_at,
+      completion_link,
+      notes,
+      created_at,
+      updated_at`,
+    [
+      item.fill_time,
+      item.required_finish_time,
+      item.urgency,
+      item.urgency_note,
+      item.requester,
+      item.executor_role,
+      item.requirement,
+      item.executor_ack,
+      item.is_done,
+      item.finished_at,
+      item.completion_link,
+      item.notes,
+      id,
+    ]
+  );
+}
+
+async function deleteWorkProgressItem(id) {
+  await ensureWorkProgressTable();
+  await query('DELETE FROM work_progress_items WHERE id = $1', [id]);
+  return { success: true };
 }
 
 async function getTravelReceivables() {
@@ -385,6 +600,7 @@ async function deleteInfluencer(id) {
 }
 
 async function getMerchants(filters = {}) {
+  await ensureMerchantColumns();
   const where = ["name != '未填写品牌'", "COALESCE(status, 'active') != 'deleted'"];
   const params = [];
   addFilter(where, params, 'status = ?', filters.status);
@@ -393,16 +609,18 @@ async function getMerchants(filters = {}) {
 }
 
 async function createMerchant(data) {
+  await ensureMerchantColumns();
   const row = await one(
     `INSERT INTO merchants (
-      name, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
+      name, country, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
       supply_price_sheet_url, cargo_sheet_url, cooperation_mode, cooperation_notes, brand_address,
-      brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name
+      brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name, has_strong_assistant, merchant_store
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
     RETURNING id`,
     [
       data.name,
+      data.country || null,
       data.category || null,
       data.contact_person || null,
       data.email || null,
@@ -423,23 +641,27 @@ async function createMerchant(data) {
       data.brand_cards || null,
       data.other_files || null,
       data.company_name || null,
+      data.has_strong_assistant || null,
+      data.merchant_store || null,
     ]
   );
   return mapInsertResult(row, data);
 }
 
 async function updateMerchant(id, data) {
+  await ensureMerchantColumns();
   await query(
     `UPDATE merchants
-     SET name = $1, category = $2, contact_person = $3, email = $4, phone = $5, platform = $6,
-         commission_rate = $7, settlement_cycle = $8, status = $9, notes = $10,
-         supply_price_sheet_url = $11, cargo_sheet_url = $12, cooperation_mode = $13,
-         cooperation_notes = $14, brand_address = $15, brand_intro = $16,
-         brand_assistants = $17, brand_live_venue = $18, brand_cards = $19,
-         other_files = $20, company_name = $21, updated_at = CURRENT_TIMESTAMP
-     WHERE id = $22`,
+     SET name = $1, country = $2, category = $3, contact_person = $4, email = $5, phone = $6, platform = $7,
+         commission_rate = $8, settlement_cycle = $9, status = $10, notes = $11,
+         supply_price_sheet_url = $12, cargo_sheet_url = $13, cooperation_mode = $14,
+         cooperation_notes = $15, brand_address = $16, brand_intro = $17,
+         brand_assistants = $18, brand_live_venue = $19, brand_cards = $20,
+         other_files = $21, company_name = $22, has_strong_assistant = $23, merchant_store = $24, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $25`,
     [
       data.name,
+      data.country || null,
       data.category || null,
       data.contact_person || null,
       data.email || null,
@@ -460,6 +682,8 @@ async function updateMerchant(id, data) {
       data.brand_cards || null,
       data.other_files || null,
       data.company_name || null,
+      data.has_strong_assistant || null,
+      data.merchant_store || null,
       id,
     ]
   );
@@ -981,6 +1205,10 @@ module.exports = {
   updateAccount,
   deleteAccount,
   exportAllData,
+  getWorkProgressItems,
+  createWorkProgressItem,
+  updateWorkProgressItem,
+  deleteWorkProgressItem,
   getTravelReceivables,
   createTravelReceivable,
   updateTravelReceivable,

@@ -20,6 +20,8 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
   const [loading, setLoading] = useState(false);
   const [fileList, setFileList] = useState<any[]>([]);
 
+  const normalizeHeader = (value: string) => value.replace(/^\uFEFF/, '').trim();
+
   // 下载模板
   const handleDownloadTemplate = () => {
     const templateData = templateColumns.map(() => ({}));
@@ -70,7 +72,26 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
     setLoading(true);
 
     try {
-      const data = await parseExcelFile(file);
+      const rawData = await parseExcelFile(file);
+      const data = rawData.map((row) => {
+        const normalized: Record<string, any> = {};
+        const cleanedRow = Object.entries(row).reduce((acc, [key, value]) => {
+          acc[normalizeHeader(key)] = value;
+          return acc;
+        }, {} as Record<string, any>);
+
+        templateColumns.forEach((column) => {
+          normalized[column.key] = cleanedRow[column.key] ?? cleanedRow[normalizeHeader(column.label)] ?? '';
+        });
+
+        Object.entries(cleanedRow).forEach(([key, value]) => {
+          if (!(key in normalized)) {
+            normalized[key] = value;
+          }
+        });
+
+        return normalized;
+      });
 
       if (!data || data.length === 0) {
         message.error('文件中没有数据');
@@ -78,11 +99,16 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
       }
 
       // 验证必填字段
-      const requiredFields = templateColumns.filter(col => col.required).map(col => col.key);
-      const missingFields = requiredFields.filter(field => !data[0].hasOwnProperty(field));
+      const requiredFields = templateColumns.filter(col => col.required);
+      const missingFields = requiredFields.filter((field) => {
+        return data.every((row) => {
+          const value = row[field.key];
+          return value === undefined || value === null || String(value).trim() === '';
+        });
+      });
 
       if (missingFields.length > 0) {
-        message.error(`缺少必填字段: ${missingFields.join(', ')}`);
+        message.error(`缺少必填字段: ${missingFields.map((field) => field.label).join('、')}`);
         return false;
       }
 

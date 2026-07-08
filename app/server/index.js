@@ -332,6 +332,47 @@ app.delete('/api/travel-receivables/:id', asyncRoute(async (req, res) => {
   res.json({ success: true });
 }));
 
+app.get('/api/work-progress', asyncRoute(async (req, res) => {
+  const data = await models.getWorkProgressItems({
+    urgency: req.query.urgency,
+    requester: req.query.requester,
+    executor_role: req.query.executor_role,
+    executor_ack: req.query.executor_ack,
+    is_done: req.query.is_done,
+    keyword: req.query.keyword,
+    startDate: req.query.startDate,
+    endDate: req.query.endDate,
+  });
+  res.json({ success: true, data });
+}));
+
+app.post('/api/work-progress', asyncRoute(async (req, res) => {
+  if (!req.body.fill_time || !req.body.requirement) {
+    res.status(400).json({ success: false, error: '请填写填写时间和具体需求' });
+    return;
+  }
+  const data = await models.createWorkProgressItem(req.body);
+  res.json({ success: true, data });
+}));
+
+app.put('/api/work-progress/:id', asyncRoute(async (req, res) => {
+  if (!req.body.fill_time || !req.body.requirement) {
+    res.status(400).json({ success: false, error: '请填写填写时间和具体需求' });
+    return;
+  }
+  const data = await models.updateWorkProgressItem(parseInt(req.params.id, 10), req.body);
+  if (!data) {
+    res.status(404).json({ success: false, error: '工作推进记录不存在' });
+    return;
+  }
+  res.json({ success: true, data });
+}));
+
+app.delete('/api/work-progress/:id', asyncRoute(async (req, res) => {
+  await models.deleteWorkProgressItem(parseInt(req.params.id, 10));
+  res.json({ success: true });
+}));
+
 app.get('/api/reports/summary', asyncRoute(async (req, res) => {
   const data = await models.getFinancialSummary({
     startDate: req.query.startDate,

@@ -111,6 +111,9 @@ function initDatabase() {
   ensureColumn('merchants', 'brand_cards', 'TEXT');
   ensureColumn('merchants', 'other_files', 'TEXT');
   ensureColumn('merchants', 'company_name', 'TEXT');
+  ensureColumn('merchants', 'has_strong_assistant', 'TEXT');
+  ensureColumn('merchants', 'merchant_store', 'TEXT');
+  ensureColumn('merchants', 'country', 'TEXT');
 
   ensureColumn('live_sessions', 'cargo_sheet', 'TEXT');
   ensureColumn('live_sessions', 'traffic_plan', 'TEXT');
@@ -268,6 +271,27 @@ function initDatabase() {
   ensureColumn('travel_receivables', 'payment_notes', 'TEXT');
   ensureColumn('travel_receivables', 'is_bad_debt', 'INTEGER DEFAULT 0');
 
+  // 工作推进表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS work_progress_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      fill_time DATETIME NOT NULL,
+      required_finish_time DATETIME,
+      urgency TEXT DEFAULT '需要',
+      urgency_note TEXT,
+      requester TEXT,
+      executor_role TEXT,
+      requirement TEXT NOT NULL,
+      executor_ack TEXT DEFAULT '否',
+      is_done TEXT DEFAULT '否',
+      finished_at DATETIME,
+      completion_link TEXT,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // 系统账号表
   db.exec(`
     CREATE TABLE IF NOT EXISTS app_accounts (
@@ -313,6 +337,10 @@ function initDatabase() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_type ON travel_receivables(receivable_type)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_reason ON travel_receivables(reason)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_work_progress_fill_time ON work_progress_items(fill_time)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_work_progress_required_time ON work_progress_items(required_finish_time)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_work_progress_urgency ON work_progress_items(urgency)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_work_progress_done ON work_progress_items(is_done)');
 
   console.log('数据库初始化完成');
 }

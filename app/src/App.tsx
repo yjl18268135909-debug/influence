@@ -11,6 +11,7 @@ import {
   LockOutlined,
   LogoutOutlined,
   SettingOutlined,
+  ProjectOutlined,
 } from '@ant-design/icons';
 import Influencers from './pages/Influencers';
 import Merchants from './pages/Merchants';
@@ -19,6 +20,7 @@ import LiveSessions from './pages/LiveSessions';
 import EmployeeManagement from './pages/EmployeeManagement';
 import FinanceManagement from './pages/FinanceManagement';
 import Settings from './pages/Settings';
+import WorkProgress from './pages/WorkProgress';
 import { accountApi } from './api';
 
 const { Header, Content, Sider } = Layout;
@@ -48,6 +50,7 @@ const menuItems: MenuItem[] = [
   { key: '/influencers', icon: <UserOutlined />, label: '达人管理' },
   { key: '/merchants', icon: <ShopOutlined />, label: '商家管理' },
   { key: '/employees', icon: <TeamOutlined />, label: '员工管理' },
+  { key: '/work-progress', icon: <ProjectOutlined />, label: '工作推进' },
   { key: '/finance', icon: <WalletOutlined />, label: '财务管理', financeOnly: true },
   { key: '/settings', icon: <SettingOutlined />, label: '设置', ownerOnly: true },
 ];
@@ -262,6 +265,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
               <Route path="/merchants" element={<Merchants />} />
               <Route path="/merchants/:id/introduction" element={<MerchantIntroduction />} />
               <Route path="/live-sessions" element={<LiveSessions key="live-sessions" />} />
+              <Route path="/work-progress" element={<WorkProgress />} />
               <Route path="/travel-costs" element={canViewFinance(currentUser) ? <FinanceManagement travelOnly /> : <Navigate to={defaultRoute} replace />} />
               <Route path="/travel-receivables" element={canViewFinance(currentUser) ? <FinanceManagement receivablesOnly /> : <Navigate to={defaultRoute} replace />} />
               <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />

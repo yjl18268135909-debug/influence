@@ -79,6 +79,7 @@ function exportAllData() {
     'costs',
     'income',
     'travel_receivables',
+    'work_progress_items',
   ];
 
   const data = tables.reduce((result, table) => {
@@ -97,6 +98,155 @@ function exportAllData() {
     database: 'sqlite',
     data,
   };
+}
+
+// ==================== 工作推进相关操作 ====================
+
+function getWorkProgressItems(filters = {}) {
+  let query = 'SELECT * FROM work_progress_items WHERE 1=1';
+  const params = [];
+
+  if (filters.urgency) {
+    query += ' AND urgency = ?';
+    params.push(filters.urgency);
+  }
+
+  if (filters.requester) {
+    query += ' AND requester = ?';
+    params.push(filters.requester);
+  }
+
+  if (filters.executor_role) {
+    query += ' AND executor_role = ?';
+    params.push(filters.executor_role);
+  }
+
+  if (filters.executor_ack) {
+    query += ' AND executor_ack = ?';
+    params.push(filters.executor_ack);
+  }
+
+  if (filters.is_done) {
+    query += ' AND is_done = ?';
+    params.push(filters.is_done);
+  }
+
+  if (filters.startDate && filters.endDate) {
+    query += ' AND date(fill_time) BETWEEN date(?) AND date(?)';
+    params.push(filters.startDate, filters.endDate);
+  }
+
+  if (filters.keyword) {
+    query += ` AND (
+      requester LIKE ?
+      OR executor_role LIKE ?
+      OR requirement LIKE ?
+      OR notes LIKE ?
+    )`;
+    const keyword = `%${filters.keyword}%`;
+    params.push(keyword, keyword, keyword, keyword);
+  }
+
+  query += ' ORDER BY COALESCE(required_finish_time, fill_time) ASC, id DESC';
+  return db.prepare(query).all(...params);
+}
+
+function normalizeWorkProgressPayload(data) {
+  return {
+    fill_time: data.fill_time,
+    required_finish_time: data.required_finish_time || null,
+    urgency: data.urgency || '需要',
+    urgency_note: data.urgency_note || null,
+    requester: data.requester || null,
+    executor_role: data.executor_role || null,
+    requirement: data.requirement,
+    executor_ack: data.executor_ack || '否',
+    is_done: data.is_done || '否',
+    finished_at: data.finished_at || null,
+    completion_link: data.completion_link || null,
+    notes: data.notes || null,
+  };
+}
+
+function createWorkProgressItem(data) {
+  const item = normalizeWorkProgressPayload(data);
+  const stmt = db.prepare(`
+    INSERT INTO work_progress_items (
+      fill_time,
+      required_finish_time,
+      urgency,
+      urgency_note,
+      requester,
+      executor_role,
+      requirement,
+      executor_ack,
+      is_done,
+      finished_at,
+      completion_link,
+      notes
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const result = stmt.run(
+    item.fill_time,
+    item.required_finish_time,
+    item.urgency,
+    item.urgency_note,
+    item.requester,
+    item.executor_role,
+    item.requirement,
+    item.executor_ack,
+    item.is_done,
+    item.finished_at,
+    item.completion_link,
+    item.notes
+  );
+  return db.prepare('SELECT * FROM work_progress_items WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function updateWorkProgressItem(id, data) {
+  const current = db.prepare('SELECT * FROM work_progress_items WHERE id = ?').get(id);
+  if (!current) return null;
+  const item = normalizeWorkProgressPayload({ ...current, ...data });
+
+  db.prepare(`
+    UPDATE work_progress_items
+    SET fill_time = ?,
+        required_finish_time = ?,
+        urgency = ?,
+        urgency_note = ?,
+        requester = ?,
+        executor_role = ?,
+        requirement = ?,
+        executor_ack = ?,
+        is_done = ?,
+        finished_at = ?,
+        completion_link = ?,
+        notes = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    item.fill_time,
+    item.required_finish_time,
+    item.urgency,
+    item.urgency_note,
+    item.requester,
+    item.executor_role,
+    item.requirement,
+    item.executor_ack,
+    item.is_done,
+    item.finished_at,
+    item.completion_link,
+    item.notes,
+    id
+  );
+
+  return db.prepare('SELECT * FROM work_progress_items WHERE id = ?').get(id);
+}
+
+function deleteWorkProgressItem(id) {
+  db.prepare('DELETE FROM work_progress_items WHERE id = ?').run(id);
+  return { success: true };
 }
 
 // ==================== 应收款项相关操作 ====================
@@ -270,50 +420,15 @@ function getMerchants(filters = {}) {
 function createMerchant(data) {
   const stmt = db.prepare(`
     INSERT INTO merchants (
-      name, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
+      name, country, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
       supply_price_sheet_url, cargo_sheet_url, cooperation_mode, cooperation_notes, brand_address,
-      brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name
+      brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name, has_strong_assistant, merchant_store
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.name,
-    data.category || null,
-    data.contact_person || null,
-    data.email || null,
-    data.phone || null,
-    data.platform || '',
-    data.commission_rate || 0,
-    data.settlement_cycle || 'monthly',
-    data.status || 'active',
-    data.notes || null,
-    data.supply_price_sheet_url || null,
-    data.cargo_sheet_url || null,
-    data.cooperation_mode || null,
-    data.cooperation_notes || null,
-    data.brand_address || null,
-    data.brand_intro || null,
-    data.brand_assistants || null,
-    data.brand_live_venue || null,
-    data.brand_cards || null,
-    data.other_files || null,
-    data.company_name || null
-  );
-  return { id: result.lastInsertRowid, ...data };
-}
-
-// 更新商家
-function updateMerchant(id, data) {
-  const stmt = db.prepare(`
-    UPDATE merchants
-    SET name = ?, category = ?, contact_person = ?, email = ?, phone = ?, platform = ?, commission_rate = ?, settlement_cycle = ?,
-        status = ?, notes = ?, supply_price_sheet_url = ?, cargo_sheet_url = ?, cooperation_mode = ?, cooperation_notes = ?,
-        brand_address = ?, brand_intro = ?, brand_assistants = ?, brand_live_venue = ?, brand_cards = ?, other_files = ?, company_name = ?,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `);
-  stmt.run(
-    data.name,
+    data.country || null,
     data.category || null,
     data.contact_person || null,
     data.email || null,
@@ -334,6 +449,48 @@ function updateMerchant(id, data) {
     data.brand_cards || null,
     data.other_files || null,
     data.company_name || null,
+    data.has_strong_assistant || null,
+    data.merchant_store || null
+  );
+  return { id: result.lastInsertRowid, ...data };
+}
+
+// 更新商家
+function updateMerchant(id, data) {
+  const stmt = db.prepare(`
+    UPDATE merchants
+    SET name = ?, country = ?, category = ?, contact_person = ?, email = ?, phone = ?, platform = ?, commission_rate = ?, settlement_cycle = ?,
+        status = ?, notes = ?, supply_price_sheet_url = ?, cargo_sheet_url = ?, cooperation_mode = ?, cooperation_notes = ?,
+        brand_address = ?, brand_intro = ?, brand_assistants = ?, brand_live_venue = ?, brand_cards = ?, other_files = ?, company_name = ?,
+        has_strong_assistant = ?, merchant_store = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
+  stmt.run(
+    data.name,
+    data.country || null,
+    data.category || null,
+    data.contact_person || null,
+    data.email || null,
+    data.phone || null,
+    data.platform || '',
+    data.commission_rate || 0,
+    data.settlement_cycle || 'monthly',
+    data.status || 'active',
+    data.notes || null,
+    data.supply_price_sheet_url || null,
+    data.cargo_sheet_url || null,
+    data.cooperation_mode || null,
+    data.cooperation_notes || null,
+    data.brand_address || null,
+    data.brand_intro || null,
+    data.brand_assistants || null,
+    data.brand_live_venue || null,
+    data.brand_cards || null,
+    data.other_files || null,
+    data.company_name || null,
+    data.has_strong_assistant || null,
+    data.merchant_store || null,
     id
   );
   return { id, ...data };
@@ -1023,6 +1180,10 @@ module.exports = {
   updateAccount,
   deleteAccount,
   exportAllData,
+  getWorkProgressItems,
+  createWorkProgressItem,
+  updateWorkProgressItem,
+  deleteWorkProgressItem,
   getTravelReceivables,
   createTravelReceivable,
   updateTravelReceivable,

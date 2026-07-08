@@ -38,6 +38,7 @@ create table public.influencers (
 create table public.merchants (
   id serial primary key,
   name text not null,
+  country text,
   category text,
   contact_person text,
   email text,
@@ -59,7 +60,9 @@ create table public.merchants (
   supply_price_sheet_url text,
   cooperation_notes text,
   brand_address text,
-  company_name text
+  company_name text,
+  has_strong_assistant text,
+  merchant_store text
 );
 
 create table public.products (

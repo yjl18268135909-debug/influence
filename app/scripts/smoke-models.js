@@ -54,6 +54,20 @@ const receivable = models.createTravelReceivable({
 models.updateTravelReceivable(receivable.id, { ...receivable, received_amount: 25, payment_notes: 'Smoke paid' });
 assert.equal(models.getTravelReceivables().find((item) => item.id === receivable.id).received_amount, 25);
 
+const workProgress = models.createWorkProgressItem({
+  fill_time: '2026-07-06 10:00:00',
+  required_finish_time: '2026-07-07 18:00:00',
+  urgency: '加急',
+  requester: 'Smoke requester',
+  executor_role: '运营',
+  requirement: 'Smoke requirement',
+  executor_ack: '否',
+  is_done: '否',
+  notes: 'Smoke note',
+});
+models.updateWorkProgressItem(workProgress.id, { ...workProgress, executor_ack: '是', is_done: '是', finished_at: '2026-07-06 12:00:00' });
+assert.equal(models.getWorkProgressItems({ is_done: '是' }).some((item) => item.id === workProgress.id), true);
+
 models.deleteLiveSession(session.id);
 models.deleteInfluencer(influencer.id);
 models.deleteMerchant(merchant.id);
@@ -62,12 +76,15 @@ assert.equal(models.getInfluencers().some((item) => item.id === influencer.id), 
 assert.equal(models.getMerchants().some((item) => item.id === merchant.id), false);
 
 models.deleteTravelReceivable(receivable.id);
+models.deleteWorkProgressItem(workProgress.id);
 models.deleteAccount(account.id);
 assert.equal(models.getTravelReceivables().some((item) => item.id === receivable.id), false);
+assert.equal(models.getWorkProgressItems().some((item) => item.id === workProgress.id), false);
 assert.equal(models.getAccounts().some((item) => item.id === account.id), false);
 
 const backup = models.exportAllData();
 assert.ok(backup.data.live_sessions);
 assert.ok(backup.data.orders);
+assert.ok(backup.data.work_progress_items);
 
 console.log('Smoke model checks passed');
