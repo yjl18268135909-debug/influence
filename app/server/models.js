@@ -420,15 +420,16 @@ function getMerchants(filters = {}) {
 function createMerchant(data) {
   const stmt = db.prepare(`
     INSERT INTO merchants (
-      name, country, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
+      name, country, merchant_owner, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
       supply_price_sheet_url, cargo_sheet_url, cooperation_mode, cooperation_notes, brand_address,
       brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name, has_strong_assistant, merchant_store
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.name,
     data.country || null,
+    data.merchant_owner || null,
     data.category || null,
     data.contact_person || null,
     data.email || null,
@@ -459,7 +460,7 @@ function createMerchant(data) {
 function updateMerchant(id, data) {
   const stmt = db.prepare(`
     UPDATE merchants
-    SET name = ?, country = ?, category = ?, contact_person = ?, email = ?, phone = ?, platform = ?, commission_rate = ?, settlement_cycle = ?,
+    SET name = ?, country = ?, merchant_owner = ?, category = ?, contact_person = ?, email = ?, phone = ?, platform = ?, commission_rate = ?, settlement_cycle = ?,
         status = ?, notes = ?, supply_price_sheet_url = ?, cargo_sheet_url = ?, cooperation_mode = ?, cooperation_notes = ?,
         brand_address = ?, brand_intro = ?, brand_assistants = ?, brand_live_venue = ?, brand_cards = ?, other_files = ?, company_name = ?,
         has_strong_assistant = ?, merchant_store = ?,
@@ -469,6 +470,7 @@ function updateMerchant(id, data) {
   stmt.run(
     data.name,
     data.country || null,
+    data.merchant_owner || null,
     data.category || null,
     data.contact_person || null,
     data.email || null,

@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, message, Popconfirm, Card, Statistic, Row, Col, Tag } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, ShopOutlined, ProfileOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import { useNavigate } from 'react-router-dom';
 import { liveSessionApi, merchantApi } from '../api';
 import DataImportExport from '../components/DataImportExport';
+import { defaultEmployees, EMPLOYEES_STORAGE_KEY } from '../data/employees';
 
 const { Option } = Select;
 
@@ -39,6 +40,15 @@ const serializeSingleValue = (value?: string | string[]) => {
   return value || '';
 };
 
+const readEmployees = () => {
+  try {
+    const saved = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
+    return saved ? JSON.parse(saved) : defaultEmployees;
+  } catch (error) {
+    return defaultEmployees;
+  }
+};
+
 const renderPlatformTags = (platform?: string | string[]) => {
   const platforms = normalizePlatforms(platform);
 
@@ -58,6 +68,7 @@ interface Merchant {
   id: number;
   name: string;
   country?: string;
+  merchant_owner?: string;
   platform: string;
   category: string;
   contact_person: string;
@@ -87,6 +98,7 @@ interface Merchant {
 const Merchants: React.FC = () => {
   const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [liveSessions, setLiveSessions] = useState<any[]>([]);
+  const [employees, setEmployees] = useState<any[]>(() => readEmployees());
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [platformFilter, setPlatformFilter] = useState<string[]>([]);
@@ -122,6 +134,21 @@ const Merchants: React.FC = () => {
     fetchMerchants();
   }, []);
 
+  useEffect(() => {
+    const syncEmployees = () => setEmployees(readEmployees());
+    window.addEventListener('storage', syncEmployees);
+    return () => window.removeEventListener('storage', syncEmployees);
+  }, []);
+
+  const employeeOptions = useMemo(() => {
+    return employees
+      .filter((item) => item.status !== 'inactive')
+      .map((item) => ({
+        label: item.role ? `${item.name}（${item.role}）` : item.name,
+        value: item.name,
+      }));
+  }, [employees]);
+
   const handleAdd = () => {
     setEditingRecord(null);
     form.resetFields();
@@ -140,6 +167,7 @@ const Merchants: React.FC = () => {
     form.setFieldsValue({
       ...record,
       country: record.country ? [record.country] : undefined,
+      merchant_owner: record.merchant_owner ? [record.merchant_owner] : undefined,
       platform: normalizePlatforms(record.platform),
     });
     setModalVisible(true);
@@ -163,6 +191,7 @@ const Merchants: React.FC = () => {
       const payload = {
         ...values,
         country: serializeSingleValue(values.country),
+        merchant_owner: serializeSingleValue(values.merchant_owner),
         platform: serializePlatforms(values.platform),
       };
       if (editingRecord) {
@@ -228,6 +257,13 @@ const Merchants: React.FC = () => {
         { text: '韩国', value: '韩国' },
       ],
       onFilter: (value, record) => record.country === value,
+    },
+    {
+      title: '对应负责人',
+      dataIndex: 'merchant_owner',
+      key: 'merchant_owner',
+      width: 130,
+      render: (value?: string) => value || '未填写',
     },
     {
       title: '商家分类',
@@ -570,6 +606,7 @@ const Merchants: React.FC = () => {
           templateColumns={[
             { key: 'name', label: '商家名称', required: true },
             { key: 'country', label: '国家' },
+            { key: 'merchant_owner', label: '对应负责人' },
             { key: 'category', label: '商家分类' },
             { key: 'contact_person', label: '联系人' },
             { key: 'email', label: '邮箱' },
@@ -608,6 +645,7 @@ const Merchants: React.FC = () => {
               ID: merchant.id,
               商家名称: merchant.name || '',
               国家: merchant.country || '',
+              对应负责人: merchant.merchant_owner || '',
               商家分类: merchant.category || '',
               联系人: merchant.contact_person || '',
               邮箱: merchant.email || '',
@@ -667,6 +705,17 @@ const Merchants: React.FC = () => {
               <Option value="日本">日本</Option>
               <Option value="韩国">韩国</Option>
             </Select>
+          </Form.Item>
+          <Form.Item name="merchant_owner" label="对应负责人">
+            <Select
+              placeholder="优先选择员工，也可以输入新增"
+              allowClear
+              showSearch
+              mode="tags"
+              maxCount={1}
+              options={employeeOptions}
+              optionFilterProp="label"
+            />
           </Form.Item>
           <Form.Item
             name="category"

@@ -149,7 +149,8 @@ async function ensureMerchantColumns() {
     ALTER TABLE merchants
       ADD COLUMN IF NOT EXISTS has_strong_assistant TEXT,
       ADD COLUMN IF NOT EXISTS merchant_store TEXT,
-      ADD COLUMN IF NOT EXISTS country TEXT
+      ADD COLUMN IF NOT EXISTS country TEXT,
+      ADD COLUMN IF NOT EXISTS merchant_owner TEXT
   `);
 }
 
@@ -612,15 +613,16 @@ async function createMerchant(data) {
   await ensureMerchantColumns();
   const row = await one(
     `INSERT INTO merchants (
-      name, country, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
+      name, country, merchant_owner, category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
       supply_price_sheet_url, cargo_sheet_url, cooperation_mode, cooperation_notes, brand_address,
       brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name, has_strong_assistant, merchant_store
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
     RETURNING id`,
     [
       data.name,
       data.country || null,
+      data.merchant_owner || null,
       data.category || null,
       data.contact_person || null,
       data.email || null,
@@ -652,16 +654,17 @@ async function updateMerchant(id, data) {
   await ensureMerchantColumns();
   await query(
     `UPDATE merchants
-     SET name = $1, country = $2, category = $3, contact_person = $4, email = $5, phone = $6, platform = $7,
-         commission_rate = $8, settlement_cycle = $9, status = $10, notes = $11,
-         supply_price_sheet_url = $12, cargo_sheet_url = $13, cooperation_mode = $14,
-         cooperation_notes = $15, brand_address = $16, brand_intro = $17,
-         brand_assistants = $18, brand_live_venue = $19, brand_cards = $20,
-         other_files = $21, company_name = $22, has_strong_assistant = $23, merchant_store = $24, updated_at = CURRENT_TIMESTAMP
-     WHERE id = $25`,
+     SET name = $1, country = $2, merchant_owner = $3, category = $4, contact_person = $5, email = $6, phone = $7, platform = $8,
+         commission_rate = $9, settlement_cycle = $10, status = $11, notes = $12,
+         supply_price_sheet_url = $13, cargo_sheet_url = $14, cooperation_mode = $15,
+         cooperation_notes = $16, brand_address = $17, brand_intro = $18,
+         brand_assistants = $19, brand_live_venue = $20, brand_cards = $21,
+         other_files = $22, company_name = $23, has_strong_assistant = $24, merchant_store = $25, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $26`,
     [
       data.name,
       data.country || null,
+      data.merchant_owner || null,
       data.category || null,
       data.contact_person || null,
       data.email || null,

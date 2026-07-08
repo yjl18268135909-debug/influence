@@ -39,6 +39,7 @@ create table public.merchants (
   id serial primary key,
   name text not null,
   country text,
+  merchant_owner text,
   category text,
   contact_person text,
   email text,
