@@ -88,9 +88,13 @@ const normalizePlatforms = (platform?: string | string[]) => {
       .filter(Boolean);
 
   const mapped = rawValues.flatMap((item) => {
+    const normalized = item.toUpperCase();
     if (item === 'Both' || item === '双平台') return ['TK', 'SP'];
     if (item === 'TikTok') return ['TK'];
     if (item === 'Shopee') return ['SP'];
+    if (normalized === 'TIKTOK') return ['TK'];
+    if (normalized === 'SHOPEE') return ['SP'];
+    if (normalized === 'TK' || normalized === 'SP' || normalized === 'FB') return [normalized];
     if (/shopfluence/i.test(item) || item === '英弗') return ['TK'];
     return [item];
   });

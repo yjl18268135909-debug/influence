@@ -141,9 +141,37 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
           const workbook = XLSX.read(data, { type: 'array' });
           const firstSheetName = workbook.SheetNames[0];
           const worksheet = workbook.Sheets[firstSheetName];
-          const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-            defval: '' // 填充空单元格
-          });
+          const range = XLSX.utils.decode_range(worksheet['!ref'] || 'A1:A1');
+          const headers: string[] = [];
+
+          for (let column = range.s.c; column <= range.e.c; column += 1) {
+            const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: column })];
+            headers[column] = normalizeHeader(cell ? XLSX.utils.format_cell(cell) : '');
+          }
+
+          const jsonData = [];
+          for (let row = range.s.r + 1; row <= range.e.r; row += 1) {
+            const rowData: Record<string, any> = {};
+            let hasValue = false;
+
+            for (let column = range.s.c; column <= range.e.c; column += 1) {
+              const header = headers[column];
+              if (!header) continue;
+
+              const cell = worksheet[XLSX.utils.encode_cell({ r: row, c: column })];
+              const hyperlink = cell?.l?.Target;
+              const value = hyperlink || (cell ? XLSX.utils.format_cell(cell) : '');
+
+              rowData[header] = value;
+              if (value !== undefined && value !== null && String(value).trim() !== '') {
+                hasValue = true;
+              }
+            }
+
+            if (hasValue) {
+              jsonData.push(rowData);
+            }
+          }
           resolve(jsonData);
         } catch (error) {
           reject(error);
