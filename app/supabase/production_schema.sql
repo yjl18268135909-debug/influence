@@ -41,6 +41,8 @@ create table public.merchants (
   country text,
   merchant_owner text,
   category text,
+  primary_category text,
+  secondary_category text,
   contact_person text,
   email text,
   phone text,

@@ -115,6 +115,8 @@ function initDatabase() {
   ensureColumn('merchants', 'merchant_store', 'TEXT');
   ensureColumn('merchants', 'country', 'TEXT');
   ensureColumn('merchants', 'merchant_owner', 'TEXT');
+  ensureColumn('merchants', 'primary_category', 'TEXT');
+  ensureColumn('merchants', 'secondary_category', 'TEXT');
 
   ensureColumn('live_sessions', 'cargo_sheet', 'TEXT');
   ensureColumn('live_sessions', 'traffic_plan', 'TEXT');

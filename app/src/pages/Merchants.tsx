@@ -16,16 +16,23 @@ const PLATFORM_OPTIONS = [
 ];
 
 const COOPERATION_MODE_OPTIONS = ['TAP', 'TSP', '英弗自营', '达播自营'];
+const ASSISTANT_OPTIONS = ['是（强助播）', '是（一般助播）', '否'];
+
+const normalizeAssistantStatus = (value?: string) => {
+  if (value === '是') return '是（强助播）';
+  return value || '';
+};
 
 const MERCHANT_EXPORT_COLUMNS = [
   { key: 'id', label: 'ID' },
   { key: 'name', label: '商家名称', required: true },
   { key: 'country', label: '国家' },
   { key: 'merchant_owner', label: '对应负责人' },
-  { key: 'category', label: '商家分类' },
+  { key: 'primary_category', label: '一级类目' },
+  { key: 'secondary_category', label: '二级类目' },
   { key: 'platform', label: '平台' },
   { key: 'cooperation_mode', label: '合作模式' },
-  { key: 'has_strong_assistant', label: '是否有强助播' },
+  { key: 'has_strong_assistant', label: '是否有助播' },
   { key: 'merchant_store', label: '商家店铺' },
   { key: 'commission_rate', label: '佣金率' },
   { key: 'supply_price_sheet_url', label: '品牌供货价货盘表' },
@@ -109,7 +116,9 @@ interface Merchant {
   country?: string;
   merchant_owner?: string;
   platform: string;
-  category: string;
+  category?: string;
+  primary_category?: string;
+  secondary_category?: string;
   contact_person: string;
   email: string;
   phone: string;
@@ -141,7 +150,8 @@ const Merchants: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [platformFilter, setPlatformFilter] = useState<string[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [primaryCategoryFilter, setPrimaryCategoryFilter] = useState<string>('all');
+  const [secondaryCategoryFilter, setSecondaryCategoryFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<Merchant | null>(null);
@@ -189,11 +199,23 @@ const Merchants: React.FC = () => {
       }));
   }, [employees]);
 
+  const primaryCategoryOptions = useMemo(() => {
+    const defaults = ['服装', '美妆', '食品', '家居', '电子产品', '其他'];
+    const values = merchants.map((item) => item.primary_category || item.category).filter(Boolean) as string[];
+    return Array.from(new Set([...defaults, ...values]));
+  }, [merchants]);
+
+  const secondaryCategoryOptions = useMemo(() => {
+    const values = merchants.map((item) => item.secondary_category).filter(Boolean) as string[];
+    return Array.from(new Set(values));
+  }, [merchants]);
+
   const handleAdd = () => {
     setEditingRecord(null);
     form.resetFields();
     form.setFieldsValue({
-      category: '服装',
+      primary_category: ['服装'],
+      secondary_category: undefined,
       platform: [],
       has_strong_assistant: undefined,
       commission_rate: 0.1,
@@ -208,7 +230,10 @@ const Merchants: React.FC = () => {
       ...record,
       country: record.country ? [record.country] : undefined,
       merchant_owner: record.merchant_owner ? [record.merchant_owner] : undefined,
+      primary_category: record.primary_category || record.category ? [record.primary_category || record.category] : undefined,
+      secondary_category: record.secondary_category ? [record.secondary_category] : undefined,
       cooperation_mode: normalizeCooperationMode(record.cooperation_mode),
+      has_strong_assistant: normalizeAssistantStatus(record.has_strong_assistant) || undefined,
       platform: normalizePlatforms(record.platform),
     });
     setModalVisible(true);
@@ -252,6 +277,9 @@ const Merchants: React.FC = () => {
         ...values,
         country: serializeSingleValue(values.country),
         merchant_owner: serializeSingleValue(values.merchant_owner),
+        primary_category: serializeSingleValue(values.primary_category),
+        secondary_category: serializeSingleValue(values.secondary_category),
+        category: serializeSingleValue(values.primary_category),
         cooperation_mode: normalizeCooperationMode(values.cooperation_mode),
         platform: serializePlatforms(values.platform),
       };
@@ -275,10 +303,12 @@ const Merchants: React.FC = () => {
                        item.contact_person.toLowerCase().includes(searchText.toLowerCase()) ||
                        (item.email && item.email.toLowerCase().includes(searchText.toLowerCase()));
     const itemPlatforms = normalizePlatforms(item.platform);
+    const itemPrimaryCategory = item.primary_category || item.category || '';
     const matchPlatform = platformFilter.length === 0 || platformFilter.some((platform) => itemPlatforms.includes(platform));
-    const matchCategory = categoryFilter === 'all' || item.category === categoryFilter;
+    const matchPrimaryCategory = !primaryCategoryFilter || primaryCategoryFilter === 'all' || itemPrimaryCategory === primaryCategoryFilter;
+    const matchSecondaryCategory = !secondaryCategoryFilter || secondaryCategoryFilter === 'all' || item.secondary_category === secondaryCategoryFilter;
     const matchStatus = statusFilter === 'all' || item.status === statusFilter;
-    return matchSearch && matchPlatform && matchCategory && matchStatus;
+    return matchSearch && matchPlatform && matchPrimaryCategory && matchSecondaryCategory && matchStatus;
   });
 
   const getHistoricalGmv = (merchant: Merchant) => {
@@ -295,10 +325,11 @@ const Merchants: React.FC = () => {
     商家名称: merchant.name || '',
     国家: merchant.country || '',
     对应负责人: merchant.merchant_owner || '',
-    商家分类: merchant.category || '',
+    一级类目: merchant.primary_category || merchant.category || '',
+    二级类目: merchant.secondary_category || '',
     平台: normalizePlatforms(merchant.platform).join('/'),
     合作模式: normalizeCooperationMode(merchant.cooperation_mode) || '',
-    是否有强助播: merchant.has_strong_assistant || '',
+    是否有助播: normalizeAssistantStatus(merchant.has_strong_assistant),
     商家店铺: merchant.merchant_store || '',
     佣金率: merchant.commission_rate ?? '',
     品牌供货价货盘表: merchant.supply_price_sheet_url || '',
@@ -359,12 +390,13 @@ const Merchants: React.FC = () => {
       render: (value?: string) => value || '未填写',
     },
     {
-      title: '商家分类',
-      dataIndex: 'category',
-      key: 'category',
+      title: '一级类目',
+      dataIndex: 'primary_category',
+      key: 'primary_category',
       width: 120,
       fixed: 'left',
-      render: (category: string) => {
+      render: (_: string, record) => {
+        const category = record.primary_category || record.category || '';
         const categoryColors: Record<string, string> = {
           '服装': 'blue',
           '美妆': 'pink',
@@ -375,14 +407,17 @@ const Merchants: React.FC = () => {
         };
         return <Tag color={categoryColors[category] || 'default'}>{category || '未分类'}</Tag>;
       },
-      filters: [
-        { text: '服装', value: '服装' },
-        { text: '美妆', value: '美妆' },
-        { text: '食品', value: '食品' },
-        { text: '家居', value: '家居' },
-        { text: '电子产品', value: '电子产品' },
-        { text: '其他', value: '其他' },
-      ],
+      filters: primaryCategoryOptions.map((item) => ({ text: item, value: item })),
+      onFilter: (value, record) => (record.primary_category || record.category) === value,
+    },
+    {
+      title: '二级类目',
+      dataIndex: 'secondary_category',
+      key: 'secondary_category',
+      width: 120,
+      render: (value?: string) => value ? <Tag>{value}</Tag> : '未填写',
+      filters: secondaryCategoryOptions.map((item) => ({ text: item, value: item })),
+      onFilter: (value, record) => record.secondary_category === value,
     },
     {
       title: '平台',
@@ -405,18 +440,17 @@ const Merchants: React.FC = () => {
       onFilter: (value, record) => normalizeCooperationMode(record.cooperation_mode) === value,
     },
     {
-      title: '是否有强助播',
+      title: '是否有助播',
       dataIndex: 'has_strong_assistant',
       key: 'has_strong_assistant',
       width: 130,
       render: (value?: string) => value ? (
-        <Tag color={value === '是' ? 'green' : 'default'}>{value}</Tag>
+        <Tag color={normalizeAssistantStatus(value).startsWith('是') ? 'green' : 'default'}>
+          {normalizeAssistantStatus(value)}
+        </Tag>
       ) : '未填写',
-      filters: [
-        { text: '是', value: '是' },
-        { text: '否', value: '否' },
-      ],
-      onFilter: (value, record) => record.has_strong_assistant === value,
+      filters: ASSISTANT_OPTIONS.map((option) => ({ text: option, value: option })),
+      onFilter: (value, record) => normalizeAssistantStatus(record.has_strong_assistant) === value,
     },
     {
       title: '商家店铺',
@@ -651,19 +685,28 @@ const Merchants: React.FC = () => {
             ))}
           </Select>
           <Select
-            placeholder="分类筛选"
-            value={categoryFilter}
-            onChange={setCategoryFilter}
-            style={{ width: 120 }}
+            placeholder="一级类目筛选"
+            value={primaryCategoryFilter}
+            onChange={setPrimaryCategoryFilter}
+            style={{ width: 150 }}
             allowClear
           >
-            <Option value="all">所有分类</Option>
-            <Option value="服装">服装</Option>
-            <Option value="美妆">美妆</Option>
-            <Option value="食品">食品</Option>
-            <Option value="家居">家居</Option>
-            <Option value="电子产品">电子产品</Option>
-            <Option value="其他">其他</Option>
+            <Option value="all">所有一级类目</Option>
+            {primaryCategoryOptions.map((category) => (
+              <Option key={category} value={category}>{category}</Option>
+            ))}
+          </Select>
+          <Select
+            placeholder="二级类目筛选"
+            value={secondaryCategoryFilter}
+            onChange={setSecondaryCategoryFilter}
+            style={{ width: 150 }}
+            allowClear
+          >
+            <Option value="all">所有二级类目</Option>
+            {secondaryCategoryOptions.map((category) => (
+              <Option key={category} value={category}>{category}</Option>
+            ))}
           </Select>
           <Select
             placeholder="状态筛选"
@@ -712,8 +755,15 @@ const Merchants: React.FC = () => {
           templateColumns={MERCHANT_EXPORT_COLUMNS}
           onImport={async (data) => {
             for (const item of data) {
+              const assistantStatus = item.has_strong_assistant || item['是否有强助播'] || item['是否有助播'];
+              const primaryCategory = item.primary_category || item['一级类目'] || item.category || item['商家分类'];
+              const secondaryCategory = item.secondary_category || item['二级类目'];
               await merchantApi.create({
                 ...item,
+                has_strong_assistant: normalizeAssistantStatus(assistantStatus),
+                primary_category: primaryCategory || '',
+                secondary_category: secondaryCategory || '',
+                category: primaryCategory || '',
                 platform: serializePlatforms(item.platform),
               });
             }
@@ -778,17 +828,21 @@ const Merchants: React.FC = () => {
             />
           </Form.Item>
           <Form.Item
-            name="category"
-            label="商家分类"
-            rules={[{ required: true, message: '请选择商家分类' }]}
+            name="primary_category"
+            label="一级类目"
+            rules={[{ required: true, message: '请选择或输入一级类目' }]}
           >
-            <Select placeholder="请选择商家分类">
-              <Option value="服装">服装</Option>
-              <Option value="美妆">美妆</Option>
-              <Option value="食品">食品</Option>
-              <Option value="家居">家居</Option>
-              <Option value="电子产品">电子产品</Option>
-              <Option value="其他">其他</Option>
+            <Select placeholder="优先选择一级类目，也可以输入新增" allowClear showSearch mode="tags" maxCount={1}>
+              {primaryCategoryOptions.map((category) => (
+                <Option key={category} value={category}>{category}</Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item name="secondary_category" label="二级类目">
+            <Select placeholder="优先选择二级类目，也可以输入新增" allowClear showSearch mode="tags" maxCount={1}>
+              {secondaryCategoryOptions.map((category) => (
+                <Option key={category} value={category}>{category}</Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item
@@ -808,10 +862,11 @@ const Merchants: React.FC = () => {
               ))}
             </Select>
           </Form.Item>
-          <Form.Item name="has_strong_assistant" label="是否有强助播">
-            <Select placeholder="请选择是否有强助播" allowClear>
-              <Option value="是">是</Option>
-              <Option value="否">否</Option>
+          <Form.Item name="has_strong_assistant" label="是否有助播">
+            <Select placeholder="请选择是否有助播" allowClear>
+              {ASSISTANT_OPTIONS.map((option) => (
+                <Option key={option} value={option}>{option}</Option>
+              ))}
             </Select>
           </Form.Item>
           <Form.Item name="merchant_store" label="商家店铺">
