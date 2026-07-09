@@ -41,7 +41,7 @@ const normalizeCommissionRate = (value: unknown) => {
 };
 
 const MERCHANT_EXPORT_COLUMNS = [
-  { key: 'id', label: 'ID' },
+  { key: 'id', label: '序号' },
   { key: 'name', label: '商家名称', required: true },
   { key: 'country', label: '国家' },
   { key: 'merchant_owner', label: '对应负责人' },
@@ -344,8 +344,8 @@ const Merchants: React.FC = () => {
       .reduce((sum, session) => sum + Number(session.actual_gmv_sgd || 0), 0);
   };
 
-  const formatMerchantExportRow = (merchant: Merchant) => ({
-    ID: merchant.id || '',
+  const formatMerchantExportRow = (merchant: Merchant, index = 0) => ({
+    序号: index + 1,
     商家名称: merchant.name || '',
     国家: merchant.country || '',
     对应负责人: merchant.merchant_owner || '',
@@ -379,11 +379,12 @@ const Merchants: React.FC = () => {
 
   const columns: ColumnsType<Merchant> = [
     {
-      title: 'ID',
+      title: '序号',
       dataIndex: 'id',
       key: 'id',
       width: 80,
       fixed: 'left',
+      render: (_: number, __: Merchant, index: number) => index + 1,
     },
     {
       title: '商家名称',
