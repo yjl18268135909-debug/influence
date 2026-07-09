@@ -68,6 +68,18 @@ function deleteAccount(id) {
   return { success: true };
 }
 
+function normalizeRate(value) {
+  if (value === undefined || value === null || value === '') return 0;
+  if (typeof value === 'number') return value > 1 ? value / 100 : value;
+
+  const text = String(value).trim();
+  if (!text) return 0;
+
+  const numericValue = Number(text.replace('%', '').replace(/,/g, '').trim());
+  if (!Number.isFinite(numericValue)) return 0;
+  return text.includes('%') || numericValue > 1 ? numericValue / 100 : numericValue;
+}
+
 function exportAllData() {
   const tables = [
     'influencers',
@@ -353,7 +365,7 @@ function createInfluencer(data) {
     data.agency || null,
     data.single_session_data || null,
     data.product_direction || null,
-    data.commission_rate || 0,
+    normalizeRate(data.commission_rate),
     data.contact || null,
     data.sample_address || null,
     data.notes || null,
@@ -376,7 +388,7 @@ function updateInfluencer(id, data) {
     data.agency || null,
     data.single_session_data || null,
     data.product_direction || null,
-    data.commission_rate || 0,
+    normalizeRate(data.commission_rate),
     data.contact || null,
     data.sample_address || null,
     data.notes || null,
@@ -437,7 +449,7 @@ function createMerchant(data) {
     data.email || null,
     data.phone || null,
     data.platform || '',
-    data.commission_rate || 0,
+    normalizeRate(data.commission_rate),
     data.settlement_cycle || 'monthly',
     data.status || 'active',
     data.notes || null,
@@ -481,7 +493,7 @@ function updateMerchant(id, data) {
     data.email || null,
     data.phone || null,
     data.platform || '',
-    data.commission_rate || 0,
+    normalizeRate(data.commission_rate),
     data.settlement_cycle || 'monthly',
     data.status || 'active',
     data.notes || null,

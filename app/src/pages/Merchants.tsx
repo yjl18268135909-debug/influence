@@ -23,6 +23,23 @@ const normalizeAssistantStatus = (value?: string) => {
   return value || '';
 };
 
+const normalizeCommissionRate = (value: unknown) => {
+  if (value === undefined || value === null || value === '') return 0;
+
+  if (typeof value === 'number') {
+    return value > 1 ? value / 100 : value;
+  }
+
+  const text = String(value).trim();
+  if (!text) return 0;
+
+  const numericText = text.replace('%', '').replace(/,/g, '').trim();
+  const numericValue = Number(numericText);
+
+  if (!Number.isFinite(numericValue)) return 0;
+  return text.includes('%') || numericValue > 1 ? numericValue / 100 : numericValue;
+};
+
 const MERCHANT_EXPORT_COLUMNS = [
   { key: 'id', label: 'ID' },
   { key: 'name', label: '商家名称', required: true },
@@ -58,6 +75,7 @@ const MERCHANT_EXPORT_COLUMNS = [
 
 const normalizeCooperationMode = (mode?: string) => {
   if (mode === '自营') return '英弗自营';
+  if (mode === '纯佣') return 'TAP';
   return mode || '';
 };
 
@@ -73,6 +91,7 @@ const normalizePlatforms = (platform?: string | string[]) => {
     if (item === 'Both' || item === '双平台') return ['TK', 'SP'];
     if (item === 'TikTok') return ['TK'];
     if (item === 'Shopee') return ['SP'];
+    if (/shopfluence/i.test(item) || item === '英弗') return ['TK'];
     return [item];
   });
 
@@ -281,6 +300,7 @@ const Merchants: React.FC = () => {
         secondary_category: serializeSingleValue(values.secondary_category),
         category: serializeSingleValue(values.primary_category),
         cooperation_mode: normalizeCooperationMode(values.cooperation_mode),
+        commission_rate: normalizeCommissionRate(values.commission_rate),
         platform: serializePlatforms(values.platform),
       };
       if (editingRecord) {
@@ -764,7 +784,9 @@ const Merchants: React.FC = () => {
                 primary_category: primaryCategory || '',
                 secondary_category: secondaryCategory || '',
                 category: primaryCategory || '',
-                platform: serializePlatforms(item.platform),
+                cooperation_mode: normalizeCooperationMode(item.cooperation_mode || item['合作模式']),
+                commission_rate: normalizeCommissionRate(item.commission_rate || item['佣金率']),
+                platform: serializePlatforms(item.platform || item['平台']),
               });
             }
             fetchMerchants();
