@@ -1,6 +1,14 @@
 import { create } from 'zustand';
 import { influencerApi, merchantApi, reportApi, liveSessionApi, orderApi, expenseApi, costApi, incomeApi } from '../api';
 
+const unwrapData = <T,>(response: { data?: unknown } | undefined, fallback: T): T => {
+  const body = response?.data;
+  if (body && typeof body === 'object' && 'data' in body) {
+    return ((body as { data?: T }).data ?? fallback);
+  }
+  return (body as T | undefined) ?? fallback;
+};
+
 interface FilterState {
   startDate: string;
   endDate: string;
@@ -67,7 +75,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchInfluencers: async () => {
     try {
       const res = await influencerApi.getAll();
-      set({ influencers: res.data || [] });
+      set({ influencers: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch influencers:', error);
       set({ influencers: [] });
@@ -77,7 +85,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchMerchants: async () => {
     try {
       const res = await merchantApi.getAll();
-      set({ merchants: res.data || [] });
+      set({ merchants: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch merchants:', error);
       set({ merchants: [] });
@@ -87,7 +95,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchLiveSessions: async () => {
     try {
       const res = await liveSessionApi.getAll();
-      set({ liveSessions: res.data || [] });
+      set({ liveSessions: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch live sessions:', error);
       set({ liveSessions: [] });
@@ -97,7 +105,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchOrders: async () => {
     try {
       const res = await orderApi.getAll();
-      set({ orders: res.data || [] });
+      set({ orders: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch orders:', error);
       set({ orders: [] });
@@ -107,7 +115,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchExpenses: async () => {
     try {
       const res = await expenseApi.getAll();
-      set({ expenses: res.data || [] });
+      set({ expenses: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch expenses:', error);
       set({ expenses: [] });
@@ -117,7 +125,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchCosts: async () => {
     try {
       const res = await costApi.getAll();
-      set({ costs: res.data || [] });
+      set({ costs: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch costs:', error);
       set({ costs: [] });
@@ -127,7 +135,7 @@ export const useDataStore = create<DataState>((set, get) => ({
   fetchIncomes: async () => {
     try {
       const res = await incomeApi.getAll();
-      set({ incomes: res.data || [] });
+      set({ incomes: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch incomes:', error);
       set({ incomes: [] });
@@ -144,7 +152,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       if (filterState.platform) params.platform = filterState.platform;
 
       const res = await reportApi.getSummary(params);
-      set({ summary: res.data });
+      set({ summary: unwrapData(res, null) });
     } catch (error) {
       console.error('Failed to fetch summary:', error);
     }
@@ -159,7 +167,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       if (filterState.platform) params.platform = filterState.platform;
 
       const res = await reportApi.getInfluencerRanking(params);
-      set({ influencerRanking: res.data });
+      set({ influencerRanking: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch influencer ranking:', error);
     }
@@ -175,7 +183,7 @@ export const useDataStore = create<DataState>((set, get) => ({
       if (filterState.platform) params.platform = filterState.platform;
 
       const res = await reportApi.getMonthlyTrend(params);
-      set({ monthlyTrend: res.data });
+      set({ monthlyTrend: unwrapData(res, []) });
     } catch (error) {
       console.error('Failed to fetch monthly trend:', error);
     }

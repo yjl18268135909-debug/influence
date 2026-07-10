@@ -21,6 +21,21 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
   const [fileList, setFileList] = useState<any[]>([]);
 
   const normalizeHeader = (value: string) => value.replace(/^\uFEFF/, '').trim();
+  const getErrorDetail = (error: unknown) => {
+    const candidate = error as { response?: { data?: { error?: string } }; message?: string };
+    return candidate?.response?.data?.error || candidate?.message || String(error);
+  };
+  const isBlankValue = (value: unknown) => value === undefined || value === null || String(value).trim() === '';
+  const isSequenceField = (key: string) => ['id', 'ID', '序号', '__rowNumber'].includes(key);
+
+  const stripInternalImportFields = (row: Record<string, any>) => {
+    const cleaned = { ...row };
+    delete cleaned.id;
+    delete cleaned.ID;
+    delete cleaned['序号'];
+    delete cleaned.__rowNumber;
+    return cleaned;
+  };
 
   // 下载模板
   const handleDownloadTemplate = () => {
@@ -64,6 +79,7 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
       XLSX.writeFile(wb, `${entityName}_${timestamp}.xlsx`);
       message.success('数据导出成功');
     } catch (error) {
+      console.warn('导出失败:', error);
       message.error('导出失败');
     } finally {
       setLoading(false);
@@ -76,7 +92,7 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
 
     try {
       const rawData = await parseExcelFile(file);
-      const data = rawData.map((row) => {
+      const normalizedRows = rawData.map((row) => {
         const normalized: Record<string, any> = {};
         const cleanedRow = Object.entries(row).reduce((acc, [key, value]) => {
           acc[normalizeHeader(key)] = value;
@@ -95,25 +111,37 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
 
         return normalized;
       });
+      const dataRows = normalizedRows.filter((row) => (
+        Object.entries(row).some(([key, value]) => !isSequenceField(key) && !isBlankValue(value))
+      ));
 
-      if (!data || data.length === 0) {
+      if (!dataRows || dataRows.length === 0) {
         message.error('文件中没有数据');
         return false;
       }
 
       // 验证必填字段
       const requiredFields = templateColumns.filter(col => col.required);
-      const missingFields = requiredFields.filter((field) => {
-        return data.every((row) => {
-          const value = row[field.key];
-          return value === undefined || value === null || String(value).trim() === '';
-        });
+      const missingRows = dataRows.flatMap((row) => {
+        const missingFields = requiredFields.filter((field) => isBlankValue(row[field.key]));
+        if (missingFields.length === 0) return [];
+        return [{
+          rowNumber: row.__rowNumber,
+          fields: missingFields.map((field) => field.label).join('、'),
+        }];
       });
 
-      if (missingFields.length > 0) {
-        message.error(`缺少必填字段: ${missingFields.map((field) => field.label).join('、')}`);
+      if (missingRows.length > 0) {
+        const preview = missingRows
+          .slice(0, 5)
+          .map((row) => `第 ${row.rowNumber || '?'} 行缺少 ${row.fields}`)
+          .join('；');
+        const suffix = missingRows.length > 5 ? `；另有 ${missingRows.length - 5} 行未显示` : '';
+        message.error(`${preview}${suffix}`);
         return false;
       }
+
+      const data = dataRows.map(stripInternalImportFields);
 
       // 执行导入
       await onImport(data);
@@ -122,8 +150,8 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
       setFileList([]);
 
       return true;
-    } catch (error) {
-      message.error('导入失败: ' + (error as Error).message);
+    } catch (error: unknown) {
+      message.error(`导入失败: ${getErrorDetail(error)}`);
       return false;
     } finally {
       setLoading(false);
@@ -151,7 +179,7 @@ const DataImportExport: React.FC<DataImportExportProps> = ({
 
           const jsonData = [];
           for (let row = range.s.r + 1; row <= range.e.r; row += 1) {
-            const rowData: Record<string, any> = {};
+            const rowData: Record<string, any> = { __rowNumber: row + 1 };
             let hasValue = false;
 
             for (let column = range.s.c; column <= range.e.c; column += 1) {

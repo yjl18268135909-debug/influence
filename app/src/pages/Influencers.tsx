@@ -121,7 +121,10 @@ const Influencers: React.FC = () => {
 
   const handleEdit = (record: Influencer) => {
     setEditingRecord(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue({
+      ...record,
+      commission_rate: normalizeRateForDisplay(record.commission_rate),
+    });
     setModalVisible(true);
   };
 
@@ -159,6 +162,18 @@ const Influencers: React.FC = () => {
     if (value === undefined || value === null || value === '') return fallback;
     const parsed = Number(String(value).replace(/[^\d.-]/g, ''));
     return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const normalizeRateForDisplay = (value?: number | string | null) => {
+    const numeric = Number(value ?? 0);
+    if (!Number.isFinite(numeric)) return 0;
+    return numeric > 0 && numeric <= 1 ? numeric * 100 : numeric;
+  };
+
+  const formatRatePercent = (value?: number | string | null) => {
+    const normalized = normalizeRateForDisplay(value);
+    const text = normalized.toFixed(2).replace(/\.?0+$/, '');
+    return `${text}%`;
   };
 
   const normalizeStatus = (value: any) => {
@@ -302,8 +317,8 @@ const Influencers: React.FC = () => {
       dataIndex: 'commission_rate',
       key: 'commission_rate',
       width: 120,
-      render: (value: number) => `${value}%`,
-      sorter: (a, b) => a.commission_rate - b.commission_rate,
+      render: (value: number) => formatRatePercent(value),
+      sorter: (a, b) => normalizeRateForDisplay(a.commission_rate) - normalizeRateForDisplay(b.commission_rate),
     },
     {
       title: '总合作GMV',

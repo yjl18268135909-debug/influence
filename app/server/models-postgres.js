@@ -552,7 +552,10 @@ async function getInfluencers(filters = {}) {
   ];
   const params = [];
   addFilter(where, params, 'status = ?', filters.status);
-  addFilter(where, params, 'platform = ?', filters.platform);
+  if (filters.platform) {
+    params.push(filters.platform);
+    where.push(`$${params.length} = ANY(string_to_array(REPLACE(COALESCE(platform, ''), ' ', ''), ','))`);
+  }
   return query(`SELECT * FROM influencers WHERE ${where.join(' AND ')} ORDER BY created_at DESC`, params);
 }
 
@@ -563,7 +566,7 @@ async function createInfluencer(data) {
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
      RETURNING id`,
     [
-      data.platform,
+      data.platform || '',
       data.name,
       data.account,
       data.agency || null,
@@ -587,7 +590,7 @@ async function updateInfluencer(id, data) {
          notes = $10, status = $11, updated_at = CURRENT_TIMESTAMP
      WHERE id = $12`,
     [
-      data.platform,
+      data.platform || '',
       data.name,
       data.account,
       data.agency || null,
@@ -619,7 +622,10 @@ async function getMerchants(filters = {}) {
   const where = ["name != '未填写品牌'", "COALESCE(status, 'active') != 'deleted'"];
   const params = [];
   addFilter(where, params, 'status = ?', filters.status);
-  addFilter(where, params, 'platform = ?', filters.platform);
+  if (filters.platform) {
+    params.push(filters.platform);
+    where.push(`$${params.length} = ANY(string_to_array(REPLACE(COALESCE(platform, ''), ' ', ''), ','))`);
+  }
   return query(`SELECT * FROM merchants WHERE ${where.join(' AND ')} ORDER BY created_at DESC`, params);
 }
 

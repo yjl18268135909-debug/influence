@@ -109,6 +109,18 @@ const serializeSingleValue = (value?: string | string[]) => {
   return value || '';
 };
 
+const safeNumber = (value?: number | string | null) => {
+  const num = Number(value ?? 0);
+  return Number.isFinite(num) ? num : 0;
+};
+
+const lowerText = (value?: string | number | null) => String(value ?? '').toLowerCase();
+
+const getErrorDetail = (error: unknown) => {
+  const candidate = error as { response?: { data?: { error?: string } }; message?: string };
+  return candidate?.response?.data?.error || candidate?.message || String(error);
+};
+
 const readEmployees = () => {
   try {
     const saved = localStorage.getItem(EMPLOYEES_STORAGE_KEY);
@@ -185,18 +197,21 @@ const Merchants: React.FC = () => {
   const fetchMerchants = async () => {
     setLoading(true);
     try {
-      const [merchantRes, sessionRes] = await Promise.all([
-        merchantApi.getAll(),
-        liveSessionApi.getAll(),
-      ]);
+      const merchantRes = await merchantApi.getAll();
       const merchantData = merchantRes.data.data;
-      const sessionData = sessionRes.data.data;
       setMerchants(Array.isArray(merchantData) ? merchantData : []);
-      setLiveSessions(Array.isArray(sessionData) ? sessionData : []);
     } catch (error) {
       console.error('获取商家列表失败:', error);
       message.error('获取商家列表失败');
       setMerchants([]);
+    }
+
+    try {
+      const sessionRes = await liveSessionApi.getAll();
+      const sessionData = sessionRes.data.data;
+      setLiveSessions(Array.isArray(sessionData) ? sessionData : []);
+    } catch (error) {
+      console.warn('获取直播场次失败，历史GMV暂时不可用:', error);
       setLiveSessions([]);
     } finally {
       setLoading(false);
@@ -323,9 +338,9 @@ const Merchants: React.FC = () => {
   };
 
   const filteredMerchants = merchants.filter(item => {
-    const matchSearch = item.name.toLowerCase().includes(searchText.toLowerCase()) ||
-                       item.contact_person.toLowerCase().includes(searchText.toLowerCase()) ||
-                       (item.email && item.email.toLowerCase().includes(searchText.toLowerCase()));
+    const keyword = searchText.toLowerCase();
+    const matchSearch = [item.name, item.contact_person, item.email]
+      .some((value) => lowerText(value).includes(keyword));
     const itemPlatforms = normalizePlatforms(item.platform);
     const itemPrimaryCategory = item.primary_category || item.category || '';
     const matchPlatform = platformFilter.length === 0 || platformFilter.some((platform) => itemPlatforms.includes(platform));
@@ -489,8 +504,8 @@ const Merchants: React.FC = () => {
       dataIndex: 'commission_rate',
       key: 'commission_rate',
       width: 110,
-      render: (rate: number) => `${(rate * 100).toFixed(2)}%`,
-      sorter: (a, b) => a.commission_rate - b.commission_rate,
+      render: (rate: number) => `${(safeNumber(rate) * 100).toFixed(2)}%`,
+      sorter: (a, b) => safeNumber(a.commission_rate) - safeNumber(b.commission_rate),
     },
     {
       title: '品牌供货价货盘表',
@@ -624,7 +639,7 @@ const Merchants: React.FC = () => {
 
   // 按分类统计
   const categoryStats = merchants.reduce((acc, m) => {
-    const category = m.category || '未分类';
+    const category = m.primary_category || m.category || '未分类';
     acc[category] = (acc[category] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -779,20 +794,24 @@ const Merchants: React.FC = () => {
           entityName="商家"
           templateColumns={MERCHANT_EXPORT_COLUMNS}
           onImport={async (data) => {
-            for (const item of data) {
+            for (const [index, item] of data.entries()) {
               const assistantStatus = item.has_strong_assistant || item['是否有强助播'] || item['是否有助播'];
               const primaryCategory = item.primary_category || item['一级类目'] || item.category || item['商家分类'];
               const secondaryCategory = item.secondary_category || item['二级类目'];
-              await merchantApi.create({
-                ...item,
-                has_strong_assistant: normalizeAssistantStatus(assistantStatus),
-                primary_category: primaryCategory || '',
-                secondary_category: secondaryCategory || '',
-                category: primaryCategory || '',
-                cooperation_mode: normalizeCooperationMode(item.cooperation_mode || item['合作模式']),
-                commission_rate: normalizeCommissionRate(item.commission_rate || item['佣金率']),
-                platform: serializePlatforms(item.platform || item['平台']),
-              });
+              try {
+                await merchantApi.create({
+                  ...item,
+                  has_strong_assistant: normalizeAssistantStatus(assistantStatus),
+                  primary_category: primaryCategory || '',
+                  secondary_category: secondaryCategory || '',
+                  category: primaryCategory || '',
+                  cooperation_mode: normalizeCooperationMode(item.cooperation_mode || item['合作模式']),
+                  commission_rate: normalizeCommissionRate(item.commission_rate || item['佣金率']),
+                  platform: serializePlatforms(item.platform || item['平台']),
+                });
+              } catch (error: unknown) {
+                throw new Error(`第 ${index + 2} 行导入失败：${getErrorDetail(error)}`);
+              }
             }
             fetchMerchants();
           }}

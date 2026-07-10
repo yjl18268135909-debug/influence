@@ -342,8 +342,8 @@ function getInfluencers(filters = {}) {
   }
 
   if (filters.platform) {
-    query += ' AND platform = ?';
-    params.push(filters.platform);
+    query += " AND (',' || REPLACE(COALESCE(platform, ''), ' ', '') || ',') LIKE ?";
+    params.push(`%,${filters.platform},%`);
   }
 
   query += ' ORDER BY created_at DESC';
@@ -359,7 +359,7 @@ function createInfluencer(data) {
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
-    data.platform,
+    data.platform || '',
     data.name,
     data.account,
     data.agency || null,
@@ -382,7 +382,7 @@ function updateInfluencer(id, data) {
     WHERE id = ?
   `);
   stmt.run(
-    data.platform,
+    data.platform || '',
     data.name,
     data.account,
     data.agency || null,
@@ -418,8 +418,8 @@ function getMerchants(filters = {}) {
   }
 
   if (filters.platform) {
-    query += ' AND platform = ?';
-    params.push(filters.platform);
+    query += " AND (',' || REPLACE(COALESCE(platform, ''), ' ', '') || ',') LIKE ?";
+    params.push(`%,${filters.platform},%`);
   }
 
   query += ' ORDER BY created_at DESC';

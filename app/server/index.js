@@ -24,6 +24,18 @@ const asyncRoute = (handler) => async (req, res) => {
 };
 
 const intOrNull = (value) => (value ? parseInt(value, 10) : null);
+const isBlank = (value) => value === undefined || value === null || String(value).trim() === '';
+
+const requireBodyFields = (req, res, fields) => {
+  const missing = fields.filter((field) => isBlank(req.body[field.key]));
+  if (missing.length === 0) return false;
+
+  res.status(400).json({
+    success: false,
+    error: `缺少必填字段: ${missing.map((field) => field.label).join('、')}`,
+  });
+  return true;
+};
 
 const fullAccessRoles = new Set(['owner', 'finance', '老板', '财务']);
 const ownerRoles = new Set(['owner', '老板']);
@@ -169,6 +181,11 @@ app.get('/api/influencers', asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/influencers', asyncRoute(async (req, res) => {
+  if (requireBodyFields(req, res, [
+    { key: 'name', label: '达人名称' },
+    { key: 'account', label: '达人账号' },
+  ])) return;
+
   const data = await models.createInfluencer(req.body);
   res.json({ success: true, data });
 }));
@@ -192,6 +209,8 @@ app.get('/api/merchants', asyncRoute(async (req, res) => {
 }));
 
 app.post('/api/merchants', asyncRoute(async (req, res) => {
+  if (requireBodyFields(req, res, [{ key: 'name', label: '商家名称' }])) return;
+
   const data = await models.createMerchant(req.body);
   res.json({ success: true, data });
 }));
