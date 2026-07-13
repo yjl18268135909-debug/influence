@@ -44,7 +44,7 @@ const MERCHANT_EXPORT_COLUMNS = [
   { key: 'id', label: '序号' },
   { key: 'name', label: '商家名称', required: true },
   { key: 'country', label: '国家' },
-  { key: 'merchant_owner', label: '对应负责人' },
+  { key: 'merchant_owner', label: '对应负责人（对接小二）' },
   { key: 'primary_category', label: '一级类目' },
   { key: 'secondary_category', label: '二级类目' },
   { key: 'platform', label: '平台' },
@@ -363,7 +363,7 @@ const Merchants: React.FC = () => {
     序号: index + 1,
     商家名称: merchant.name || '',
     国家: merchant.country || '',
-    对应负责人: merchant.merchant_owner || '',
+    '对应负责人（对接小二）': merchant.merchant_owner || '',
     一级类目: merchant.primary_category || merchant.category || '',
     二级类目: merchant.secondary_category || '',
     平台: normalizePlatforms(merchant.platform).join('/'),
@@ -398,7 +398,6 @@ const Merchants: React.FC = () => {
       dataIndex: 'id',
       key: 'id',
       width: 80,
-      fixed: 'left',
       render: (_: number, __: Merchant, index: number) => index + 1,
     },
     {
@@ -423,7 +422,7 @@ const Merchants: React.FC = () => {
       onFilter: (value, record) => record.country === value,
     },
     {
-      title: '对应负责人',
+      title: '对应负责人（对接小二）',
       dataIndex: 'merchant_owner',
       key: 'merchant_owner',
       width: 130,
@@ -434,7 +433,6 @@ const Merchants: React.FC = () => {
       dataIndex: 'primary_category',
       key: 'primary_category',
       width: 120,
-      fixed: 'left',
       render: (_: string, record) => {
         const category = record.primary_category || record.category || '';
         const categoryColors: Record<string, string> = {
@@ -464,7 +462,6 @@ const Merchants: React.FC = () => {
       dataIndex: 'platform',
       key: 'platform',
       width: 110,
-      fixed: 'left',
       render: renderPlatformTags,
       filters: PLATFORM_OPTIONS.map((option) => ({ text: option.label, value: option.value })),
       onFilter: (value, record) => normalizePlatforms(record.platform).includes(String(value)),
@@ -474,7 +471,6 @@ const Merchants: React.FC = () => {
       dataIndex: 'cooperation_mode',
       key: 'cooperation_mode',
       width: 110,
-      fixed: 'left',
       render: (value: string) => normalizeCooperationMode(value) || '未填写',
       filters: COOPERATION_MODE_OPTIONS.map((mode) => ({ text: mode, value: mode })),
       onFilter: (value, record) => normalizeCooperationMode(record.cooperation_mode) === value,
@@ -603,7 +599,6 @@ const Merchants: React.FC = () => {
     {
       title: '操作',
       key: 'action',
-      fixed: 'right' as const,
       width: 150,
       render: (_: any, record: Merchant) => (
         <Space size="small">
@@ -798,9 +793,11 @@ const Merchants: React.FC = () => {
               const assistantStatus = item.has_strong_assistant || item['是否有强助播'] || item['是否有助播'];
               const primaryCategory = item.primary_category || item['一级类目'] || item.category || item['商家分类'];
               const secondaryCategory = item.secondary_category || item['二级类目'];
+              const merchantOwner = item.merchant_owner || item['对应负责人（对接小二）'] || item['对应负责人'];
               try {
                 await merchantApi.create({
                   ...item,
+                  merchant_owner: merchantOwner || '',
                   has_strong_assistant: normalizeAssistantStatus(assistantStatus),
                   primary_category: primaryCategory || '',
                   secondary_category: secondaryCategory || '',
@@ -862,7 +859,7 @@ const Merchants: React.FC = () => {
               <Option value="韩国">韩国</Option>
             </Select>
           </Form.Item>
-          <Form.Item name="merchant_owner" label="对应负责人">
+          <Form.Item name="merchant_owner" label="对应负责人（对接小二）">
             <Select
               placeholder="优先选择员工，也可以输入新增"
               allowClear

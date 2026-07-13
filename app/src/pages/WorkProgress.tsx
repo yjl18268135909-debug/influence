@@ -7,6 +7,7 @@ import { workProgressApi } from '../api';
 import { defaultEmployees, EMPLOYEES_STORAGE_KEY } from '../data/employees';
 
 const { RangePicker } = DatePicker;
+const { TextArea } = Input;
 
 type WorkProgressItem = {
   id: number;
@@ -30,6 +31,21 @@ type Employee = {
   role?: string;
   status?: string;
 };
+
+type EditableField = keyof Pick<
+  WorkProgressItem,
+  | 'fill_time'
+  | 'required_finish_time'
+  | 'urgency'
+  | 'requester'
+  | 'executor_role'
+  | 'requirement'
+  | 'executor_ack'
+  | 'is_done'
+  | 'finished_at'
+  | 'completion_link'
+  | 'notes'
+>;
 
 const urgencyOptions = ['不急', '需要', '加急'];
 const yesNoOptions = ['是', '否'];
@@ -71,6 +87,9 @@ const WorkProgress: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRecord, setEditingRecord] = useState<WorkProgressItem | null>(null);
+  const [editingCell, setEditingCell] = useState<{ id: number; field: EditableField } | null>(null);
+  const [draftValue, setDraftValue] = useState<any>(null);
+  const [savingCell, setSavingCell] = useState<string | null>(null);
   const [filters, setFilters] = useState<any>({});
   const [form] = Form.useForm();
 
@@ -199,6 +218,145 @@ const WorkProgress: React.FC = () => {
     fetchItems({});
   };
 
+  const getCellKey = (record: WorkProgressItem, field: EditableField) => `${record.id}:${field}`;
+
+  const startCellEdit = (record: WorkProgressItem, field: EditableField) => {
+    setEditingCell({ id: record.id, field });
+    setDraftValue(record[field] ?? null);
+  };
+
+  const cancelCellEdit = () => {
+    setEditingCell(null);
+    setDraftValue(null);
+  };
+
+  const normalizeCellValue = (field: EditableField, value: any) => {
+    if (['fill_time', 'required_finish_time', 'finished_at'].includes(field)) {
+      return normalizeDateValue(value);
+    }
+    if (value === undefined) return null;
+    return value;
+  };
+
+  const saveCellEdit = async (record: WorkProgressItem, field: EditableField, value = draftValue) => {
+    const normalizedValue = normalizeCellValue(field, value);
+    if (field === 'requirement' && !String(normalizedValue || '').trim()) {
+      message.warning('具体需求不能为空');
+      return;
+    }
+    if (field === 'fill_time' && !normalizedValue) {
+      message.warning('填写时间不能为空');
+      return;
+    }
+
+    const cellKey = getCellKey(record, field);
+    setSavingCell(cellKey);
+    try {
+      const payload = {
+        ...record,
+        [field]: normalizedValue,
+        fill_time: field === 'fill_time' ? normalizedValue : record.fill_time,
+        requirement: field === 'requirement' ? normalizedValue : record.requirement,
+      };
+      const response = await workProgressApi.update(record.id, payload);
+      const updated = response.data?.data || payload;
+      setItems((prev) => prev.map((item) => (item.id === record.id ? { ...item, ...updated } : item)));
+      cancelCellEdit();
+      message.success('已保存');
+    } catch (error: any) {
+      console.error('单元格保存失败:', error);
+      message.error(error?.response?.data?.error || '保存失败');
+    } finally {
+      setSavingCell(null);
+    }
+  };
+
+  const renderEditableCell = (
+    record: WorkProgressItem,
+    field: EditableField,
+    display: React.ReactNode,
+    editor: React.ReactNode,
+  ) => {
+    const active = editingCell?.id === record.id && editingCell.field === field;
+    if (active) {
+      return (
+        <div onClick={(event) => event.stopPropagation()}>
+          {editor}
+        </div>
+      );
+    }
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => startCellEdit(record, field)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') startCellEdit(record, field);
+        }}
+        style={{
+          minHeight: 32,
+          cursor: 'pointer',
+          padding: '4px 0',
+        }}
+        title="点击修改"
+      >
+        {display}
+      </div>
+    );
+  };
+
+  const renderTextEditor = (record: WorkProgressItem, field: EditableField, multiline = false) => {
+    const commonProps = {
+      autoFocus: true,
+      value: draftValue ?? '',
+      disabled: savingCell === getCellKey(record, field),
+      onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setDraftValue(event.target.value),
+      onBlur: () => saveCellEdit(record, field),
+      onPressEnter: (event: any) => {
+        if (!multiline) {
+          event.preventDefault();
+          saveCellEdit(record, field);
+        }
+      },
+    };
+    return multiline ? <TextArea {...commonProps} autoSize={{ minRows: 2, maxRows: 5 }} /> : <Input {...commonProps} />;
+  };
+
+  const renderSelectEditor = (
+    record: WorkProgressItem,
+    field: EditableField,
+    options: { label: React.ReactNode; value: string }[],
+  ) => (
+    <Select
+      autoFocus
+      open
+      allowClear
+      showSearch
+      optionFilterProp="label"
+      style={{ minWidth: 120, width: '100%' }}
+      value={draftValue || undefined}
+      options={options}
+      disabled={savingCell === getCellKey(record, field)}
+      onChange={(value) => saveCellEdit(record, field, value || null)}
+      onBlur={() => cancelCellEdit()}
+    />
+  );
+
+  const renderDateEditor = (record: WorkProgressItem, field: EditableField) => (
+    <DatePicker
+      autoFocus
+      open
+      showTime
+      style={{ width: '100%' }}
+      value={draftValue ? dayjs(draftValue) : null}
+      disabled={savingCell === getCellKey(record, field)}
+      onChange={(value) => saveCellEdit(record, field, value)}
+      onOpenChange={(open) => {
+        if (!open) cancelCellEdit();
+      }}
+    />
+  );
+
   const columns: ColumnsType<WorkProgressItem> = [
     {
       title: '填写时间',
@@ -206,64 +364,117 @@ const WorkProgress: React.FC = () => {
       width: 150,
       fixed: 'left',
       sorter: (a, b) => dayjs(a.fill_time).valueOf() - dayjs(b.fill_time).valueOf(),
-      render: formatDateTime,
+      render: (_, record) => renderEditableCell(record, 'fill_time', formatDateTime(record.fill_time), renderDateEditor(record, 'fill_time')),
     },
     {
       title: '要求完成时间',
       dataIndex: 'required_finish_time',
       width: 160,
       sorter: (a, b) => dayjs(a.required_finish_time || 0).valueOf() - dayjs(b.required_finish_time || 0).valueOf(),
-      render: formatDateTime,
+      render: (_, record) => renderEditableCell(record, 'required_finish_time', formatDateTime(record.required_finish_time), renderDateEditor(record, 'required_finish_time')),
     },
     {
       title: '紧急程度',
       dataIndex: 'urgency',
       width: 120,
-      render: (value: string, record) => (
+      render: (value: string, record) => renderEditableCell(
+        record,
+        'urgency',
         <Space size={4}>
           <Tag color={urgencyColor[value] || 'default'}>{value || '需要'}</Tag>
           {record.urgency_note ? <Tooltip title={record.urgency_note}><span style={{ color: '#999' }}>注</span></Tooltip> : null}
-        </Space>
+        </Space>,
+        renderSelectEditor(record, 'urgency', urgencyOptions.map((option) => ({ label: option, value: option }))),
       ),
     },
-    { title: '需求人', dataIndex: 'requester', width: 120, render: (value) => value || '-' },
-    { title: '执行岗位人', dataIndex: 'executor_role', width: 140, render: (value) => value || '-' },
+    {
+      title: '需求人',
+      dataIndex: 'requester',
+      width: 120,
+      render: (value, record) => renderEditableCell(
+        record,
+        'requester',
+        value || '-',
+        renderSelectEditor(record, 'requester', requesterOptions),
+      ),
+    },
+    {
+      title: '执行岗位人',
+      dataIndex: 'executor_role',
+      width: 140,
+      render: (value, record) => renderEditableCell(
+        record,
+        'executor_role',
+        value || '-',
+        renderSelectEditor(record, 'executor_role', executorOptions),
+      ),
+    },
     {
       title: '具体需求',
       dataIndex: 'requirement',
       width: 320,
       ellipsis: true,
-      render: (value: string) => <Tooltip title={value}>{value}</Tooltip>,
+      render: (value: string, record) => renderEditableCell(
+        record,
+        'requirement',
+        <Tooltip title={value}>{value}</Tooltip>,
+        renderTextEditor(record, 'requirement', true),
+      ),
     },
     {
       title: '执行人知否',
       dataIndex: 'executor_ack',
       width: 120,
-      render: (value: string) => <Tag color={statusColor[value] || 'default'}>{value || '否'}</Tag>,
+      render: (value: string, record) => renderEditableCell(
+        record,
+        'executor_ack',
+        <Tag color={statusColor[value] || 'default'}>{value || '否'}</Tag>,
+        renderSelectEditor(record, 'executor_ack', yesNoOptions.map((option) => ({ label: option, value: option }))),
+      ),
     },
     {
       title: '是否完毕',
       dataIndex: 'is_done',
       width: 120,
-      render: (value: string) => <Tag color={statusColor[value] || 'default'}>{value || '否'}</Tag>,
+      render: (value: string, record) => renderEditableCell(
+        record,
+        'is_done',
+        <Tag color={statusColor[value] || 'default'}>{value || '否'}</Tag>,
+        renderSelectEditor(record, 'is_done', yesNoOptions.map((option) => ({ label: option, value: option }))),
+      ),
     },
-    { title: '完成时间', dataIndex: 'finished_at', width: 150, render: formatDateTime },
+    {
+      title: '完成时间',
+      dataIndex: 'finished_at',
+      width: 150,
+      render: (_, record) => renderEditableCell(record, 'finished_at', formatDateTime(record.finished_at), renderDateEditor(record, 'finished_at')),
+    },
     {
       title: '完成链接',
       dataIndex: 'completion_link',
       width: 120,
-      render: (value?: string) => value ? (
-        <Button type="link" icon={<LinkOutlined />} href={value} target="_blank" rel="noreferrer">
-          打开
-        </Button>
-      ) : '-',
+      render: (value: string | undefined, record) => renderEditableCell(
+        record,
+        'completion_link',
+        value ? (
+          <Button type="link" icon={<LinkOutlined />} href={value} target="_blank" rel="noreferrer" onClick={(event) => event.stopPropagation()}>
+            打开
+          </Button>
+        ) : '-',
+        renderTextEditor(record, 'completion_link'),
+      ),
     },
     {
       title: '备注',
       dataIndex: 'notes',
       width: 260,
       ellipsis: true,
-      render: (value?: string) => value ? <Tooltip title={value}>{value}</Tooltip> : '-',
+      render: (value: string | undefined, record) => renderEditableCell(
+        record,
+        'notes',
+        value ? <Tooltip title={value}>{value}</Tooltip> : '-',
+        renderTextEditor(record, 'notes', true),
+      ),
     },
     {
       title: '操作',

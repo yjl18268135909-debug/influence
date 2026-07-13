@@ -11,6 +11,7 @@ const { TextArea } = Input;
 const influencerImportHeaders = [
   '平台',
   '达人名称',
+  '达人分层',
   '达人账号',
   '达人佣金',
   '达人机构',
@@ -27,6 +28,7 @@ interface Influencer {
   platform: string;
   name: string;
   account: string;
+  tier?: string;
   agency?: string;
   single_session_data?: string;
   product_direction?: string;
@@ -57,6 +59,15 @@ const Influencers: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<Influencer | null>(null);
   const [importing, setImporting] = useState(false);
   const [form] = Form.useForm();
+
+  const tierOptions = Array.from(new Set([
+    '头部达人',
+    '腰部达人',
+    '尾部达人',
+    'KOL',
+    'KOC',
+    ...influencers.map((item) => item.tier).filter(Boolean),
+  ] as string[]));
 
   const fetchInfluencers = async () => {
     setLoading(true);
@@ -123,6 +134,7 @@ const Influencers: React.FC = () => {
     setEditingRecord(record);
     form.setFieldsValue({
       ...record,
+      tier: record.tier ? [record.tier] : undefined,
       commission_rate: normalizeRateForDisplay(record.commission_rate),
     });
     setModalVisible(true);
@@ -143,11 +155,15 @@ const Influencers: React.FC = () => {
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
+      const payload = {
+        ...values,
+        tier: Array.isArray(values.tier) ? values.tier[0] : values.tier,
+      };
       if (editingRecord) {
-        await influencerApi.update(editingRecord.id, values);
+        await influencerApi.update(editingRecord.id, payload);
         message.success('更新成功');
       } else {
-        await influencerApi.create(values);
+        await influencerApi.create(payload);
         message.success('添加成功');
       }
       setModalVisible(false);
@@ -199,6 +215,7 @@ const Influencers: React.FC = () => {
     const exampleRow = [
       'TikTok',
       '示例达人',
+      '腰部达人',
       'example_account',
       10,
       '示例机构',
@@ -236,6 +253,7 @@ const Influencers: React.FC = () => {
           platform,
           name,
           account,
+          tier: String(getImportValue(row, ['达人分层', 'tier'])).trim() || undefined,
           agency: String(getImportValue(row, ['达人机构', 'agency'])).trim() || undefined,
           single_session_data: String(getImportValue(row, ['达人单场数据', 'single_session_data'])).trim() || undefined,
           product_direction: String(getImportValue(row, ['达人选品方向', 'product_direction'])).trim() || undefined,
@@ -268,6 +286,7 @@ const Influencers: React.FC = () => {
   const filteredInfluencers = influencers.filter(item => {
     const matchSearch = item.name.toLowerCase().includes(searchText.toLowerCase()) ||
                        item.account.toLowerCase().includes(searchText.toLowerCase()) ||
+                       (item.tier && item.tier.toLowerCase().includes(searchText.toLowerCase())) ||
                        (item.contact && item.contact.toLowerCase().includes(searchText.toLowerCase()));
     const matchPlatform = platformFilter === 'all' || item.platform === platformFilter;
     const matchStatus = statusFilter === 'all' || item.status === statusFilter;
@@ -304,6 +323,15 @@ const Influencers: React.FC = () => {
       width: 150,
       fixed: 'left' as const,
       sorter: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      title: '达人分层',
+      dataIndex: 'tier',
+      key: 'tier',
+      width: 120,
+      render: (text?: string) => text ? <Tag color="blue">{text}</Tag> : '未填写',
+      filters: tierOptions.map((tier) => ({ text: tier, value: tier })),
+      onFilter: (value, record) => record.tier === value,
     },
     {
       title: '达人账号',
@@ -474,7 +502,7 @@ const Influencers: React.FC = () => {
       <Card>
         <Space style={{ marginBottom: 16 }} wrap>
           <Input
-            placeholder="搜索达人名称、账号或联系方式"
+            placeholder="搜索达人名称、分层、账号或联系方式"
             prefix={<SearchOutlined />}
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
@@ -574,6 +602,23 @@ const Influencers: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
+
+          <Form.Item
+            name="tier"
+            label="达人分层"
+          >
+            <Select
+              mode="tags"
+              maxCount={1}
+              placeholder="请选择或输入达人分层"
+              allowClear
+              showSearch
+            >
+              {tierOptions.map((tier) => (
+                <Option key={tier} value={tier}>{tier}</Option>
+              ))}
+            </Select>
+          </Form.Item>
 
           <Form.Item
             name="account"

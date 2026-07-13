@@ -26,6 +26,7 @@ function initDatabase() {
       platform TEXT NOT NULL,
       name TEXT NOT NULL,
       account TEXT NOT NULL,
+      tier TEXT,
       agency TEXT,
       single_session_data TEXT,
       product_direction TEXT,
@@ -93,6 +94,23 @@ function initDatabase() {
     )
   `);
 
+  // 数据看板手动目标
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dashboard_targets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scope_key TEXT NOT NULL UNIQUE,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      dimension TEXT DEFAULT 'custom',
+      influencer_id INTEGER,
+      received_target_gmv REAL DEFAULT 0,
+      sales_gmv REAL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   const ensureColumn = (table, column, definition) => {
     const columns = db.prepare(`PRAGMA table_info(${table})`).all();
     if (!columns.some((item) => item.name === column)) {
@@ -117,6 +135,7 @@ function initDatabase() {
   ensureColumn('merchants', 'merchant_owner', 'TEXT');
   ensureColumn('merchants', 'primary_category', 'TEXT');
   ensureColumn('merchants', 'secondary_category', 'TEXT');
+  ensureColumn('influencers', 'tier', 'TEXT');
 
   ensureColumn('live_sessions', 'cargo_sheet', 'TEXT');
   ensureColumn('live_sessions', 'traffic_plan', 'TEXT');
@@ -274,6 +293,27 @@ function initDatabase() {
   ensureColumn('travel_receivables', 'payment_notes', 'TEXT');
   ensureColumn('travel_receivables', 'is_bad_debt', 'INTEGER DEFAULT 0');
 
+  // 应付款项明细表
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS travel_payables (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      payable_date DATETIME NOT NULL,
+      payable_type TEXT NOT NULL,
+      object_name TEXT,
+      reason TEXT,
+      amount REAL DEFAULT 0,
+      notes TEXT,
+      paid_amount REAL DEFAULT 0,
+      payment_notes TEXT,
+      is_paid INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  ensureColumn('travel_payables', 'paid_amount', 'REAL DEFAULT 0');
+  ensureColumn('travel_payables', 'payment_notes', 'TEXT');
+  ensureColumn('travel_payables', 'is_paid', 'INTEGER DEFAULT 0');
+
   // 工作推进表
   db.exec(`
     CREATE TABLE IF NOT EXISTS work_progress_items (
@@ -340,6 +380,10 @@ function initDatabase() {
   db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_type ON travel_receivables(receivable_type)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_reason ON travel_receivables(reason)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_payables_date ON travel_payables(payable_date)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_payables_type ON travel_payables(payable_type)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_payables_reason ON travel_payables(reason)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_travel_payables_object ON travel_payables(object_name)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_work_progress_fill_time ON work_progress_items(fill_time)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_work_progress_required_time ON work_progress_items(required_finish_time)');
   db.exec('CREATE INDEX IF NOT EXISTS idx_work_progress_urgency ON work_progress_items(urgency)');

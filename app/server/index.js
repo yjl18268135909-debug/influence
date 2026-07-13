@@ -65,7 +65,7 @@ const requireOwner = (req, res, next) => {
 };
 
 app.use(['/api/accounts', '/api/export'], requireOwner);
-app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports', '/api/travel-receivables'], requireFullAccess);
+app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports', '/api/travel-receivables', '/api/travel-payables'], requireFullAccess);
 
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const username = String(req.body.username || '').trim();
@@ -251,6 +251,29 @@ app.delete('/api/live-sessions/:id', asyncRoute(async (req, res) => {
   res.json({ success: true });
 }));
 
+app.get('/api/dashboard-targets', asyncRoute(async (req, res) => {
+  const data = await models.getDashboardTarget({
+    dimension: req.query.dimension,
+    start_date: req.query.start_date,
+    end_date: req.query.end_date,
+    influencer_id: intOrNull(req.query.influencer_id),
+  });
+  res.json({ success: true, data });
+}));
+
+app.put('/api/dashboard-targets', asyncRoute(async (req, res) => {
+  if (requireBodyFields(req, res, [
+    { key: 'start_date', label: '开始日期' },
+    { key: 'end_date', label: '结束日期' },
+  ])) return;
+
+  const data = await models.upsertDashboardTarget({
+    ...req.body,
+    influencer_id: intOrNull(req.body.influencer_id),
+  });
+  res.json({ success: true, data });
+}));
+
 app.get('/api/orders', asyncRoute(async (req, res) => {
   const data = await models.getOrders({
     influencer_id: intOrNull(req.query.influencer_id),
@@ -348,6 +371,30 @@ app.put('/api/travel-receivables/:id', asyncRoute(async (req, res) => {
 
 app.delete('/api/travel-receivables/:id', asyncRoute(async (req, res) => {
   await models.deleteTravelReceivable(parseInt(req.params.id, 10));
+  res.json({ success: true });
+}));
+
+app.get('/api/travel-payables', asyncRoute(async (req, res) => {
+  const data = await models.getTravelPayables();
+  res.json({ success: true, data });
+}));
+
+app.post('/api/travel-payables', asyncRoute(async (req, res) => {
+  const data = await models.createTravelPayable(req.body);
+  res.json({ success: true, data });
+}));
+
+app.put('/api/travel-payables/:id', asyncRoute(async (req, res) => {
+  const data = await models.updateTravelPayable(parseInt(req.params.id, 10), req.body);
+  if (!data) {
+    res.status(404).json({ success: false, error: '应付款项不存在' });
+    return;
+  }
+  res.json({ success: true, data });
+}));
+
+app.delete('/api/travel-payables/:id', asyncRoute(async (req, res) => {
+  await models.deleteTravelPayable(parseInt(req.params.id, 10));
   res.json({ success: true });
 }));
 

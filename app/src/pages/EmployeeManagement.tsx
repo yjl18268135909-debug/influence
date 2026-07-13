@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Badge, Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
-import { EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Badge, Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { liveSessionApi } from '../api';
@@ -280,6 +280,23 @@ const EmployeeManagement: React.FC = () => {
     employeeForm.resetFields();
   };
 
+  const deleteEmployee = (employee: Employee) => {
+    setEmployees((prev) => prev.filter((item) => item.id !== employee.id));
+    setLeaves((prev) => prev.filter((item) => item.employeeName !== employee.name));
+    setAttendanceRecords((prev) => prev.filter((item) => item.employeeName !== employee.name));
+    setPerformanceRecords((prev) => prev.filter((item) => item.employeeName !== employee.name));
+    setScores((prev) => prev.filter((item) => item.employeeName !== employee.name));
+    setLeaveOverrides((prev) => {
+      const next: Record<string, string[]> = {};
+      Object.entries(prev).forEach(([date, names]) => {
+        const filteredNames = names.filter((name) => name !== employee.name);
+        if (filteredNames.length > 0) next[date] = filteredNames;
+      });
+      return next;
+    });
+    message.success('员工已删除');
+  };
+
   const openAttendanceModal = (employee?: Employee) => {
     const month = selectedMonth.format('YYYY-MM');
     const current = employee ? attendanceRecords.find((item) => item.employeeName === employee.name && item.month === month) : undefined;
@@ -548,6 +565,16 @@ const EmployeeManagement: React.FC = () => {
                       <Space>
                         <Button type="link" icon={<EditOutlined />} onClick={() => openEditEmployeeModal(record)}>编辑</Button>
                         <Button type="link" onClick={() => openAttendanceModal(record)}>考勤</Button>
+                        <Popconfirm
+                          title="确定删除这个员工吗？"
+                          description="删除后会同时清理该员工的休假、考勤、表现和评分记录。"
+                          okText="删除"
+                          cancelText="取消"
+                          okButtonProps={{ danger: true }}
+                          onConfirm={() => deleteEmployee(record)}
+                        >
+                          <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+                        </Popconfirm>
                       </Space>
                     ),
                   },

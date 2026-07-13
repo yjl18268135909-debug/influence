@@ -12,6 +12,7 @@ import {
   LogoutOutlined,
   SettingOutlined,
   ProjectOutlined,
+  DashboardOutlined,
 } from '@ant-design/icons';
 import Influencers from './pages/Influencers';
 import Merchants from './pages/Merchants';
@@ -21,6 +22,7 @@ import EmployeeManagement from './pages/EmployeeManagement';
 import FinanceManagement from './pages/FinanceManagement';
 import Settings from './pages/Settings';
 import WorkProgress from './pages/WorkProgress';
+import DataDashboard from './pages/DataDashboard';
 import { accountApi } from './api';
 
 const { Header, Content, Sider } = Layout;
@@ -43,10 +45,12 @@ type MenuItem = {
 };
 
 const menuItems: MenuItem[] = [
+  { key: '/data-dashboard', icon: <DashboardOutlined />, label: '数据看板' },
   { key: '/schedule-communication', icon: <MessageOutlined />, label: '达人排期沟通' },
   { key: '/live-sessions', icon: <CalendarOutlined />, label: '直播场次管理' },
   { key: '/travel-costs', icon: <WalletOutlined />, label: '达人机酒管理', financeOnly: true },
   { key: '/travel-receivables', icon: <WalletOutlined />, label: '应收款项', financeOnly: true },
+  { key: '/travel-payables', icon: <WalletOutlined />, label: '应付管理', financeOnly: true },
   { key: '/influencers', icon: <UserOutlined />, label: '达人管理' },
   { key: '/merchants', icon: <ShopOutlined />, label: '商家管理' },
   { key: '/employees', icon: <TeamOutlined />, label: '员工管理' },
@@ -142,7 +146,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
     return true;
   });
   const defaultRoute = visibleMenuItems[0]?.key || '/schedule-communication';
-  const restrictedFinanceRoutes = ['/finance', '/travel-costs', '/travel-receivables'];
+  const restrictedFinanceRoutes = ['/finance', '/travel-costs', '/travel-receivables', '/travel-payables'];
   const ownerOnlyRoutes = ['/settings'];
 
   const {
@@ -261,6 +265,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
           >
             <Routes>
               <Route path="/" element={<Navigate to={defaultRoute} replace />} />
+              <Route path="/data-dashboard" element={<DataDashboard />} />
               <Route path="/influencers" element={<Influencers />} />
               <Route path="/merchants" element={<Merchants />} />
               <Route path="/merchants/:id/introduction" element={<MerchantIntroduction />} />
@@ -268,6 +273,7 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
               <Route path="/work-progress" element={<WorkProgress />} />
               <Route path="/travel-costs" element={canViewFinance(currentUser) ? <FinanceManagement travelOnly /> : <Navigate to={defaultRoute} replace />} />
               <Route path="/travel-receivables" element={canViewFinance(currentUser) ? <FinanceManagement receivablesOnly /> : <Navigate to={defaultRoute} replace />} />
+              <Route path="/travel-payables" element={canViewFinance(currentUser) ? <FinanceManagement payablesOnly /> : <Navigate to={defaultRoute} replace />} />
               <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />
               <Route path="/employees" element={<EmployeeManagement />} />
               <Route path="/finance" element={canViewFinance(currentUser) ? <FinanceManagement /> : <Navigate to={defaultRoute} replace />} />

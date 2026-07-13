@@ -8,7 +8,16 @@ function addFilter(parts, params, condition, value) {
 
 function normalizeId(value) {
   if (value === undefined || value === null || value === '') return null;
-  return Number(value);
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function getCustomMerchantName(value) {
+  const prefix = '__custom_brand__:';
+  if (typeof value === 'string' && value.startsWith(prefix)) {
+    return value.slice(prefix.length).trim();
+  }
+  return '';
 }
 
 function normalizeRate(value) {
@@ -90,6 +99,32 @@ async function ensureTravelReceivablesTable() {
   await query('CREATE INDEX IF NOT EXISTS idx_travel_receivables_object ON travel_receivables(object_name)');
 }
 
+async function ensureTravelPayablesTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS travel_payables (
+      id SERIAL PRIMARY KEY,
+      payable_date DATE NOT NULL,
+      payable_type TEXT NOT NULL,
+      object_name TEXT,
+      reason TEXT,
+      amount DOUBLE PRECISION DEFAULT 0,
+      notes TEXT,
+      paid_amount DOUBLE PRECISION DEFAULT 0,
+      payment_notes TEXT,
+      is_paid BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+  await query('ALTER TABLE travel_payables ADD COLUMN IF NOT EXISTS paid_amount DOUBLE PRECISION DEFAULT 0');
+  await query('ALTER TABLE travel_payables ADD COLUMN IF NOT EXISTS payment_notes TEXT');
+  await query('ALTER TABLE travel_payables ADD COLUMN IF NOT EXISTS is_paid BOOLEAN DEFAULT FALSE');
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_payables_date ON travel_payables(payable_date)');
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_payables_type ON travel_payables(payable_type)');
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_payables_reason ON travel_payables(reason)');
+  await query('CREATE INDEX IF NOT EXISTS idx_travel_payables_object ON travel_payables(object_name)');
+}
+
 async function ensureWorkProgressTable() {
   await query(`
     CREATE TABLE IF NOT EXISTS work_progress_items (
@@ -156,6 +191,24 @@ async function ensureLiveSessionColumns() {
   `);
 }
 
+async function ensureDashboardTargetsTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS dashboard_targets (
+      id SERIAL PRIMARY KEY,
+      scope_key TEXT UNIQUE NOT NULL,
+      start_date DATE NOT NULL,
+      end_date DATE NOT NULL,
+      dimension TEXT DEFAULT 'custom',
+      influencer_id INTEGER,
+      received_target_gmv DOUBLE PRECISION DEFAULT 0,
+      sales_gmv DOUBLE PRECISION DEFAULT 0,
+      notes TEXT,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
 async function ensureMerchantColumns() {
   await query(`
     ALTER TABLE merchants
@@ -165,6 +218,13 @@ async function ensureMerchantColumns() {
       ADD COLUMN IF NOT EXISTS merchant_owner TEXT,
       ADD COLUMN IF NOT EXISTS primary_category TEXT,
       ADD COLUMN IF NOT EXISTS secondary_category TEXT
+  `);
+}
+
+async function ensureInfluencerColumns() {
+  await query(`
+    ALTER TABLE influencers
+      ADD COLUMN IF NOT EXISTS tier TEXT
   `);
 }
 
@@ -231,6 +291,7 @@ async function exportAllData() {
   await ensureAccountsTable();
   await ensureTravelReceivablesTable();
   await ensureWorkProgressTable();
+  await ensureDashboardTargetsTable();
   await ensureMerchantColumns();
   const tables = [
     'influencers',
@@ -242,7 +303,9 @@ async function exportAllData() {
     'costs',
     'income',
     'travel_receivables',
+    'travel_payables',
     'work_progress_items',
+    'dashboard_targets',
   ];
 
   const data = {};
@@ -260,6 +323,75 @@ async function exportAllData() {
     database: 'postgres',
     data,
   };
+}
+
+function buildDashboardScopeKey(data = {}) {
+  const dimension = data.dimension || 'custom';
+  const startDate = data.start_date || '';
+  const endDate = data.end_date || '';
+  const influencerId = data.influencer_id === undefined || data.influencer_id === null || data.influencer_id === ''
+    ? 'all'
+    : String(data.influencer_id);
+  return `${dimension}:${startDate}:${endDate}:${influencerId}`;
+}
+
+function normalizeDashboardTarget(data = {}) {
+  const rawInfluencerId = data.influencer_id === undefined || data.influencer_id === null || data.influencer_id === ''
+    ? null
+    : Number(data.influencer_id);
+  const item = {
+    start_date: data.start_date,
+    end_date: data.end_date,
+    dimension: data.dimension || 'custom',
+    influencer_id: Number.isFinite(rawInfluencerId) ? rawInfluencerId : null,
+    received_target_gmv: Number(data.received_target_gmv || 0),
+    sales_gmv: Number(data.sales_gmv || 0),
+    notes: data.notes || null,
+  };
+  return {
+    ...item,
+    scope_key: buildDashboardScopeKey(item),
+  };
+}
+
+async function getDashboardTarget(filters = {}) {
+  await ensureDashboardTargetsTable();
+  const item = normalizeDashboardTarget(filters);
+  const row = await one('SELECT * FROM dashboard_targets WHERE scope_key = $1', [item.scope_key]);
+  return row || item;
+}
+
+async function upsertDashboardTarget(data = {}) {
+  await ensureDashboardTargetsTable();
+  const item = normalizeDashboardTarget(data);
+  const row = await one(
+    `INSERT INTO dashboard_targets (
+       scope_key, start_date, end_date, dimension, influencer_id,
+       received_target_gmv, sales_gmv, notes
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     ON CONFLICT (scope_key) DO UPDATE SET
+       start_date = EXCLUDED.start_date,
+       end_date = EXCLUDED.end_date,
+       dimension = EXCLUDED.dimension,
+       influencer_id = EXCLUDED.influencer_id,
+       received_target_gmv = EXCLUDED.received_target_gmv,
+       sales_gmv = EXCLUDED.sales_gmv,
+       notes = EXCLUDED.notes,
+       updated_at = CURRENT_TIMESTAMP
+     RETURNING *`,
+    [
+      item.scope_key,
+      item.start_date,
+      item.end_date,
+      item.dimension,
+      item.influencer_id,
+      item.received_target_gmv,
+      item.sales_gmv,
+      item.notes,
+    ]
+  );
+  return row;
 }
 
 async function getWorkProgressItems(filters = {}) {
@@ -544,7 +676,113 @@ async function deleteTravelReceivable(id) {
   return { success: true };
 }
 
+async function getTravelPayables() {
+  await ensureTravelPayablesTable();
+  return query(`
+    SELECT
+      id,
+      to_char(payable_date, 'YYYY-MM-DD') as payable_date,
+      payable_type,
+      object_name,
+      reason,
+      COALESCE(amount, 0)::float as amount,
+      notes,
+      COALESCE(paid_amount, 0)::float as paid_amount,
+      payment_notes,
+      COALESCE(is_paid, FALSE) as is_paid,
+      created_at,
+      updated_at
+    FROM travel_payables
+    ORDER BY payable_date DESC, created_at DESC, id DESC
+  `);
+}
+
+async function createTravelPayable(data) {
+  await ensureTravelPayablesTable();
+  const row = await one(
+    `INSERT INTO travel_payables
+      (payable_date, payable_type, object_name, reason, amount, notes, paid_amount, payment_notes, is_paid)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING
+      id,
+      to_char(payable_date, 'YYYY-MM-DD') as payable_date,
+      payable_type,
+      object_name,
+      reason,
+      COALESCE(amount, 0)::float as amount,
+      notes,
+      COALESCE(paid_amount, 0)::float as paid_amount,
+      payment_notes,
+      COALESCE(is_paid, FALSE) as is_paid,
+      created_at,
+      updated_at`,
+    [
+      data.payable_date,
+      data.payable_type,
+      data.object_name || null,
+      data.reason || null,
+      Number(data.amount || 0),
+      data.notes || null,
+      Number(data.paid_amount || 0),
+      data.payment_notes || null,
+      Boolean(data.is_paid),
+    ]
+  );
+  return row;
+}
+
+async function updateTravelPayable(id, data) {
+  await ensureTravelPayablesTable();
+  const row = await one(
+    `UPDATE travel_payables
+     SET payable_date = $1,
+         payable_type = $2,
+         object_name = $3,
+         reason = $4,
+         amount = $5,
+         notes = $6,
+         paid_amount = $7,
+         payment_notes = $8,
+         is_paid = $9,
+         updated_at = CURRENT_TIMESTAMP
+     WHERE id = $10
+     RETURNING
+      id,
+      to_char(payable_date, 'YYYY-MM-DD') as payable_date,
+      payable_type,
+      object_name,
+      reason,
+      COALESCE(amount, 0)::float as amount,
+      notes,
+      COALESCE(paid_amount, 0)::float as paid_amount,
+      payment_notes,
+      COALESCE(is_paid, FALSE) as is_paid,
+      created_at,
+      updated_at`,
+    [
+      data.payable_date,
+      data.payable_type,
+      data.object_name || null,
+      data.reason || null,
+      Number(data.amount || 0),
+      data.notes || null,
+      Number(data.paid_amount || 0),
+      data.payment_notes || null,
+      Boolean(data.is_paid),
+      id,
+    ]
+  );
+  return row;
+}
+
+async function deleteTravelPayable(id) {
+  await ensureTravelPayablesTable();
+  await query('DELETE FROM travel_payables WHERE id = $1', [id]);
+  return { success: true };
+}
+
 async function getInfluencers(filters = {}) {
+  await ensureInfluencerColumns();
   const where = [
     "account NOT LIKE 'placeholder_%'",
     "account NOT LIKE 'live_%'",
@@ -560,15 +798,17 @@ async function getInfluencers(filters = {}) {
 }
 
 async function createInfluencer(data) {
+  await ensureInfluencerColumns();
   const row = await one(
     `INSERT INTO influencers
-      (platform, name, account, agency, single_session_data, product_direction, commission_rate, contact, sample_address, notes, status)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+      (platform, name, account, tier, agency, single_session_data, product_direction, commission_rate, contact, sample_address, notes, status)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
      RETURNING id`,
     [
       data.platform || '',
       data.name,
       data.account,
+      data.tier || null,
       data.agency || null,
       data.single_session_data || null,
       data.product_direction || null,
@@ -583,16 +823,18 @@ async function createInfluencer(data) {
 }
 
 async function updateInfluencer(id, data) {
+  await ensureInfluencerColumns();
   await query(
     `UPDATE influencers
-     SET platform = $1, name = $2, account = $3, agency = $4, single_session_data = $5,
-         product_direction = $6, commission_rate = $7, contact = $8, sample_address = $9,
-         notes = $10, status = $11, updated_at = CURRENT_TIMESTAMP
-     WHERE id = $12`,
+     SET platform = $1, name = $2, account = $3, tier = $4, agency = $5, single_session_data = $6,
+         product_direction = $7, commission_rate = $8, contact = $9, sample_address = $10,
+         notes = $11, status = $12, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $13`,
     [
       data.platform || '',
       data.name,
       data.account,
+      data.tier || null,
       data.agency || null,
       data.single_session_data || null,
       data.product_direction || null,
@@ -746,7 +988,7 @@ async function resolveLiveSessionRelations(data) {
 
   let merchantId = normalizeId(data.merchant_id);
   if (!merchantId) {
-    const merchantName = data.merchant_name || '未填写品牌';
+    const merchantName = data.merchant_name || getCustomMerchantName(data.merchant_id) || '未填写品牌';
     const existing = await one('SELECT id FROM merchants WHERE name = $1 LIMIT 1', [merchantName]);
     if (existing) {
       merchantId = existing.id;
@@ -814,8 +1056,8 @@ function liveSessionValues(data, influencerId, merchantId) {
     data.traffic_plan || null,
     data.estimated_ad_cost || 0,
     data.expected_gmv || 0,
-    data.influencer_commission_rate || 0,
-    data.brand_commission_rate || 0,
+    normalizeRate(data.influencer_commission_rate),
+    normalizeRate(data.brand_commission_rate),
     data.travel_cost_share || 0,
     data.brand_receivable || 0,
     data.owner || null,
@@ -1237,10 +1479,16 @@ module.exports = {
   createWorkProgressItem,
   updateWorkProgressItem,
   deleteWorkProgressItem,
+  getDashboardTarget,
+  upsertDashboardTarget,
   getTravelReceivables,
   createTravelReceivable,
   updateTravelReceivable,
   deleteTravelReceivable,
+  getTravelPayables,
+  createTravelPayable,
+  updateTravelPayable,
+  deleteTravelPayable,
   getInfluencers,
   createInfluencer,
   updateInfluencer,

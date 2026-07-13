@@ -455,6 +455,24 @@ code {
   cursor: default;
 }
 
+.schedule-period-slots {
+  display: grid;
+  grid-template-rows: minmax(96px, auto) minmax(96px, auto);
+  gap: 8px;
+}
+
+.schedule-period-slot {
+  min-width: 0;
+}
+
+.schedule-period-slot-empty {
+  min-height: 96px;
+}
+
+.schedule-period-slot .schedule-session-block:last-child {
+  margin-bottom: 0;
+}
+
 .schedule-session-title {
   display: flex;
   align-items: center;
@@ -514,6 +532,9 @@ code {
 }
 
 .schedule-session-commission {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   color: rgba(0, 0, 0, 0.72);
   font-weight: 600;
   line-height: 18px;

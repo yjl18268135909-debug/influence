@@ -60,9 +60,21 @@ const formatTimelineSessionMeta = (item: any) => {
 };
 
 const formatCommissionRate = (value: number | string | null | undefined) => {
-  const numeric = Number(value || 0);
+  const numeric = normalizeCommissionRateForDisplay(value);
   if (!Number.isFinite(numeric) || numeric <= 0) return '';
   return `${numeric.toLocaleString(undefined, { maximumFractionDigits: 2 })}%`;
+};
+
+const normalizeCommissionRateForDisplay = (value: number | string | null | undefined) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return numeric <= 1 ? numeric * 100 : numeric;
+};
+
+const normalizeCommissionRateForStorage = (value: number | string | null | undefined) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric) || numeric <= 0) return 0;
+  return numeric > 1 ? numeric / 100 : numeric;
 };
 
 const formatInlineInfo = (...values: Array<string | null | undefined>) => values.filter(Boolean).join(' · ');
@@ -89,6 +101,20 @@ const getSessionEndDate = (item: any) => {
   const start = dayjs(item.session_date);
   const duration = Number(item.duration_hours || 0);
   return duration > 24 ? start.add(duration, 'hour') : start;
+};
+
+const isSessionStartInRange = (item: any, start: Dayjs, end: Dayjs) => {
+  const sessionStart = dayjs(item.session_date);
+  return !sessionStart.isBefore(start) && !sessionStart.isAfter(end);
+};
+
+const isSessionOnDay = (item: any, day: Dayjs) => {
+  return dayjs(item.session_date).isSame(day, 'day');
+};
+
+const isEveningSession = (item: any) => {
+  if (!hasSessionTime(item.session_date)) return false;
+  return dayjs(item.session_date).hour() >= 18;
 };
 
 const getSessionInterval = (item: any) => {
@@ -373,8 +399,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
     filteredSessions.forEach((item) => {
       const start = dayjs(item.session_date);
-      const end = getSessionEndDate(item);
-      if (end.isBefore(rangeStart) || start.isAfter(rangeEnd)) return;
+      if (!isSessionStartInRange(item, rangeStart, rangeEnd)) return;
 
       const name = item.influencer_name || '未填写达人';
       const time = start.valueOf();
@@ -392,9 +417,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const getDaySessionCount = (day: Dayjs) => {
     return filteredSessions.filter((item) => {
       if (!isLiveSession(item)) return false;
-      const start = dayjs(item.session_date);
-      const end = getSessionEndDate(item);
-      return !end.isBefore(day.startOf('day')) && !start.isAfter(day.endOf('day'));
+      return isSessionOnDay(item, day);
     }).length;
   };
 
@@ -414,9 +437,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     const weekEnd = timelineDays[timelineDays.length - 1].endOf('day');
     return filteredSessions.filter((item) => {
       const influencerName = item.influencer_name || '未填写达人';
-      const start = dayjs(item.session_date);
-      const end = isTravelNoteOnly(item) ? start : getSessionEndDate(item);
-      return influencerName === name && !end.isBefore(weekStart) && !start.isAfter(weekEnd);
+      return influencerName === name && isSessionStartInRange(item, weekStart, weekEnd);
     });
   };
 
@@ -489,8 +510,12 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   };
 
   const getSessionCommissionLine = (item: any) => {
+    const brandCommission = formatCommissionRate(getSessionBrandCommissionRate(item));
     const influencerCommission = formatCommissionRate(getSessionInfluencerCommissionRate(item));
-    return influencerCommission ? `达人佣金 ${influencerCommission}` : '';
+    return [
+      `品牌佣金 ${brandCommission || '-'}`,
+      `达人佣金 ${influencerCommission || '-'}`,
+    ];
   };
 
   const scrollTimelineToDate = (date: Dayjs) => {
@@ -538,7 +563,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       platform: 'TikTok',
       traffic_plan: 'self',
       duration_hours: 4,
-      influencer_commission_rate: matchedInfluencer?.commission_rate || 0,
+      influencer_commission_rate: normalizeCommissionRateForDisplay(matchedInfluencer?.commission_rate || 0),
       brand_commission_rate: 0,
     });
     setEditingSession(null);
@@ -565,8 +590,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       cargo_sheet: record.cargo_sheet || getMerchantCargoSheet(record.merchant_id, record.merchant_name),
       big_screen_screenshot: record.big_screen_screenshot ? [{ uid: '-1', name: record.big_screen_screenshot, status: 'done' }] : [],
       traffic_plan: record.traffic_plan || 'self',
-      influencer_commission_rate: record.influencer_commission_rate || record.influencer_default_commission_rate || 0,
-      brand_commission_rate: record.brand_commission_rate || record.merchant_commission_rate || 0,
+      influencer_commission_rate: normalizeCommissionRateForDisplay(record.influencer_commission_rate || record.influencer_default_commission_rate || 0),
+      brand_commission_rate: normalizeCommissionRateForDisplay(record.brand_commission_rate || record.merchant_commission_rate || 0),
     });
     setModalVisible(true);
   };
@@ -595,10 +620,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     try {
       const values = await form.validateFields();
       const screenshotFiles = values.big_screen_screenshot || [];
-      const merchantId = isCustomBrandValue(values.merchant_id) ? undefined : values.merchant_id;
-      const customMerchantName = getCustomBrandName(values.merchant_id);
-      const selectedMerchant = merchants.find((item) => String(item.id) === String(merchantId) || String(item._id) === String(merchantId));
-      const merchantName = selectedMerchant?.name || values.merchant_name || customMerchantName;
+      const { merchantId, merchantName } = await ensureSessionMerchant(values);
       const assistantName = Array.isArray(values.assistant) ? values.assistant[0] : values.assistant;
       const payload = {
         ...values,
@@ -610,10 +632,12 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         cargo_sheet: values.cargo_sheet || getMerchantCargoSheet(merchantId, merchantName),
         brand_category: isEmptyDisplayValue(values.brand_category) ? getMerchantCategory(merchantId, merchantName) : values.brand_category,
         brand_cooperation_mode: isEmptyDisplayValue(values.brand_cooperation_mode) ? getMerchantCooperationMode(merchantId, merchantName) : values.brand_cooperation_mode,
+        influencer_commission_rate: normalizeCommissionRateForStorage(values.influencer_commission_rate),
+        brand_commission_rate: normalizeCommissionRateForStorage(values.brand_commission_rate),
         big_screen_screenshot: screenshotFiles.map((file: any) => file.name).join(', '),
         session_date: values.session_date
           ? (values.session_date.hour() || values.session_date.minute() || values.session_date.second()
-            ? values.session_date.format('YYYY-MM-DD HH:mm:ss')
+            ? values.session_date.format('YYYY-MM-DDTHH:mm:ssZ')
             : values.session_date.format('YYYY-MM-DD'))
           : selectedDate.format('YYYY-MM-DD'),
         influencer_name: influencers.find((item) => item.id === values.influencer_id || item._id === values.influencer_id)?.name || values.influencer_name,
@@ -839,8 +863,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       brand: formatBrandName(item.merchant_name),
       category: getSessionBrandCategory(item),
       platform: item.platform || '未填写',
-      influencer_commission_rate: Number(getSessionInfluencerCommissionRate(item) || 0),
-      brand_commission_rate: Number(getSessionBrandCommissionRate(item) || 0),
+      influencer_commission_rate: normalizeCommissionRateForDisplay(getSessionInfluencerCommissionRate(item)),
+      brand_commission_rate: normalizeCommissionRateForDisplay(getSessionBrandCommissionRate(item)),
       expected_gmv: Number(item.expected_gmv || 0),
       estimated_ad_cost: Number(item.estimated_ad_cost || 0),
       duration_hours: Number(item.duration_hours || 0),
@@ -947,8 +971,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           brand_category: String(row['类目'] || '').trim() || selectedMerchant?.category || undefined,
           brand_cooperation_mode: String(row['品牌合作模式'] || '').trim() || selectedMerchant?.cooperation_mode || undefined,
           platform: String(row['平台'] || '').trim() || 'TikTok',
-          influencer_commission_rate: parseImportNumber(row['达人佣金'], Number(selectedInfluencer?.commission_rate || 0)),
-          brand_commission_rate: parseImportNumber(row['品牌佣金'], Number(selectedMerchant?.commission_rate || 0)),
+          influencer_commission_rate: normalizeCommissionRateForStorage(parseImportNumber(row['达人佣金'], Number(selectedInfluencer?.commission_rate || 0))),
+          brand_commission_rate: normalizeCommissionRateForStorage(parseImportNumber(row['品牌佣金'], Number(selectedMerchant?.commission_rate || 0))),
           expected_gmv: parseImportNumber(row['目标GMV']),
           estimated_ad_cost: parseImportNumber(row['预计投放费用']),
           duration_hours: parseImportNumber(row['直播时长'], 4),
@@ -1095,6 +1119,53 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       form.setFieldValue('cargo_sheet', cargoSheet);
     }
     setBrandSearchText(brandName);
+  };
+
+  const ensureSessionMerchant = async (values: any) => {
+    const rawMerchantId = values.merchant_id;
+    const merchantId = isCustomBrandValue(rawMerchantId) ? undefined : rawMerchantId;
+    const customMerchantName = getCustomBrandName(rawMerchantId);
+    const selectedMerchant = merchants.find((item) => String(item.id) === String(merchantId) || String(item._id) === String(merchantId));
+    const merchantName = (selectedMerchant?.name || values.merchant_name || customMerchantName || '').trim();
+
+    if (selectedMerchant || !merchantName) {
+      return {
+        merchantId,
+        merchantName,
+        merchant: selectedMerchant,
+      };
+    }
+
+    const existingMerchant = merchants.find((item) => String(item.name || '').trim() === merchantName);
+    if (existingMerchant) {
+      return {
+        merchantId: existingMerchant.id || existingMerchant._id,
+        merchantName: existingMerchant.name,
+        merchant: existingMerchant,
+      };
+    }
+
+    const category = isEmptyDisplayValue(values.brand_category) ? undefined : values.brand_category;
+    const cooperationMode = isEmptyDisplayValue(values.brand_cooperation_mode) ? undefined : values.brand_cooperation_mode;
+    const response = await merchantApi.create({
+      name: merchantName,
+      platform: values.platform || 'TikTok',
+      category,
+      primary_category: category,
+      cooperation_mode: cooperationMode,
+      commission_rate: normalizeCommissionRateForStorage(values.brand_commission_rate),
+      cargo_sheet_url: values.cargo_sheet || null,
+      settlement_cycle: 'monthly',
+      status: 'active',
+    });
+    const createdMerchant = response.data?.data || response.data;
+    setMerchants((prev) => [createdMerchant, ...prev]);
+
+    return {
+      merchantId: createdMerchant?.id || createdMerchant?._id,
+      merchantName: createdMerchant?.name || merchantName,
+      merchant: createdMerchant,
+    };
   };
 
   const dateCellRender = (value: Dayjs) => {
@@ -1808,28 +1879,153 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
             </div>
             {timelineDays.map((day) => {
               const dayItems = getSessionsForInfluencer(name).filter((item) => {
-                const start = dayjs(item.session_date);
-                const end = isTravelNoteOnly(item) ? start : getSessionEndDate(item);
-                return !end.isBefore(day.startOf('day')) && !start.isAfter(day.endOf('day'));
+                return isSessionOnDay(item, day);
               });
               const travelNotes = dayItems.filter((item) => item.influencer_travel_note);
               const daySessions = dayItems.filter((item) => !isTravelNoteOnly(item));
+              const daytimeSessions = daySessions.filter((item) => !isEveningSession(item));
+              const eveningSessions = daySessions.filter((item) => isEveningSession(item));
+              const renderSessionBlock = (item: any) => {
+                const color = getInfluencerColor(name);
+                const merchantIntroId = getSessionMerchantIntroId(item);
+                const brandName = formatBrandName(item.merchant_name);
+                const cooperationMode = getSessionBrandCooperationMode(item);
+                return (
+                  <div
+                    key={item.id || `${item.session_date}-${item.merchant_name}`}
+                    role="button"
+                    tabIndex={0}
+                    className="schedule-session-block"
+                    style={{ borderColor: color, background: `${color}18`, color }}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setSelectedDate(day);
+                    }}
+                    onKeyDown={(event) => {
+                      event.stopPropagation();
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        setSelectedDate(day);
+                      }
+                    }}
+                  >
+                    <span className="schedule-session-title">
+                      {communicationOnly && merchantIntroId ? (
+                        <span
+                          role="link"
+                          tabIndex={0}
+                          className="schedule-session-brand-link"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            navigate(`/merchants/${merchantIntroId}/introduction`, {
+                              state: { from: '/schedule-communication', fromLabel: '返回达人排期沟通' },
+                            });
+                          }}
+                          onKeyDown={(event) => {
+                            event.stopPropagation();
+                            if (event.key === 'Enter' || event.key === ' ') {
+                              navigate(`/merchants/${merchantIntroId}/introduction`, {
+                                state: { from: '/schedule-communication', fromLabel: '返回达人排期沟通' },
+                              });
+                            }
+                          }}
+                        >
+                          {brandName}
+                        </span>
+                      ) : (
+                        <strong>
+                          {communicationOnly ? brandName : formatInlineInfo(brandName, cooperationMode && cooperationMode !== '未填写' ? cooperationMode : undefined)}
+                        </strong>
+                      )}
+                    </span>
+                    {formatTimelineSessionMeta(item) ? <span>{formatTimelineSessionMeta(item)}</span> : null}
+                    {communicationOnly ? (
+                      <span className="schedule-session-mode">
+                        {getSessionBrandCategory(item)}
+                      </span>
+                    ) : (
+                      <>
+                        {renderInlineScheduleField(item, 'live_venue', '场地')}
+                        {renderInlineScheduleField(item, 'owner', '负责人')}
+                        {renderInlineScheduleField(item, 'assistant', '助播')}
+                      </>
+                    )}
+                    <span className="schedule-session-commission">
+                      {getSessionCommissionLine(item).map((line) => (
+                        <span key={line}>{line}</span>
+                      ))}
+                    </span>
+                    <div className="schedule-session-actions">
+                      <span
+                        className="schedule-session-action"
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          openEditModal(item);
+                        }}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            openEditModal(item);
+                          }
+                        }}
+                      >
+                        修改
+                      </span>
+                      <Popconfirm
+                        title="删除场次"
+                        description="确定删除这场直播排期吗？"
+                        okText="删除"
+                        cancelText="取消"
+                        onConfirm={(event) => {
+                          event?.stopPropagation();
+                          handleDelete(item);
+                        }}
+                        onCancel={(event) => event?.stopPropagation()}
+                      >
+                        <span
+                          className="schedule-session-action"
+                          role="button"
+                          tabIndex={0}
+                          onClick={(event) => event.stopPropagation()}
+                          onKeyDown={(event) => event.stopPropagation()}
+                        >
+                          删除
+                        </span>
+                      </Popconfirm>
+                    </div>
+                  </div>
+                );
+              };
 
               return (
                 <div
                   key={`${name}-${day.format('YYYY-MM-DD')}`}
                   className="schedule-day-cell"
-                  onClick={() => {
+                  onDoubleClick={() => {
                     setSelectedDate(day);
                     openCreateModal(day, name);
                   }}
+                  title="双击新增排期"
                 >
                   {travelNotes.map((item) => (
                     <div
                       key={`travel-${item.id || `${item.session_date}-${item.influencer_name}`}`}
                       className="schedule-travel-note"
-                      onClick={(event) => event.stopPropagation()}
-                      onKeyDown={(event) => event.stopPropagation()}
+                      role="button"
+                      tabIndex={0}
+                      title="单击修改行程备注"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEditModal(item);
+                      }}
+                      onKeyDown={(event) => {
+                        event.stopPropagation();
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openEditModal(item);
+                        }
+                      }}
                     >
                       <span>{item.influencer_travel_note}</span>
                       <Popconfirm
@@ -1853,117 +2049,14 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                       </Popconfirm>
                     </div>
                   ))}
-                  {daySessions.map((item) => {
-                    const color = getInfluencerColor(name);
-                    const merchantIntroId = getSessionMerchantIntroId(item);
-                    const brandName = formatBrandName(item.merchant_name);
-                    const cooperationMode = getSessionBrandCooperationMode(item);
-                    return (
-                      <React.Fragment key={item.id || `${item.session_date}-${item.merchant_name}`}>
-                        <div
-                          role="button"
-                          tabIndex={0}
-                          className="schedule-session-block"
-                          style={{ borderColor: color, background: `${color}18`, color }}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelectedDate(day);
-                          }}
-                          onKeyDown={(event) => {
-                            event.stopPropagation();
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              setSelectedDate(day);
-                            }
-                          }}
-                        >
-                          <span className="schedule-session-title">
-                            {communicationOnly && merchantIntroId ? (
-                              <span
-                                role="link"
-                                tabIndex={0}
-                                className="schedule-session-brand-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  navigate(`/merchants/${merchantIntroId}/introduction`, {
-                                    state: { from: '/schedule-communication', fromLabel: '返回达人排期沟通' },
-                                  });
-                                }}
-                                onKeyDown={(event) => {
-                                  event.stopPropagation();
-                                  if (event.key === 'Enter' || event.key === ' ') {
-                                    navigate(`/merchants/${merchantIntroId}/introduction`, {
-                                      state: { from: '/schedule-communication', fromLabel: '返回达人排期沟通' },
-                                    });
-                                  }
-                                }}
-                              >
-                                {brandName}
-                              </span>
-                            ) : (
-                              <strong>
-                                {communicationOnly ? brandName : formatInlineInfo(brandName, cooperationMode && cooperationMode !== '未填写' ? cooperationMode : undefined)}
-                              </strong>
-                            )}
-                          </span>
-                          {formatTimelineSessionMeta(item) ? <span>{formatTimelineSessionMeta(item)}</span> : null}
-                          {communicationOnly ? (
-                            <span className="schedule-session-mode">
-                              {getSessionBrandCategory(item)}
-                            </span>
-                          ) : (
-                            <>
-                              {renderInlineScheduleField(item, 'live_venue', '场地')}
-                              {renderInlineScheduleField(item, 'owner', '负责人')}
-                              {renderInlineScheduleField(item, 'assistant', '助播')}
-                            </>
-                          )}
-                          {getSessionCommissionLine(item) ? (
-                            <span className="schedule-session-commission">{getSessionCommissionLine(item)}</span>
-                          ) : null}
-                          <div className="schedule-session-actions">
-                            <span
-                              className="schedule-session-action"
-                              role="button"
-                              tabIndex={0}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openEditModal(item);
-                              }}
-                              onKeyDown={(event) => {
-                                event.stopPropagation();
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                  openEditModal(item);
-                                }
-                              }}
-                            >
-                              修改
-                            </span>
-                          <Popconfirm
-                            title="删除场次"
-                            description="确定删除这场直播排期吗？"
-                            okText="删除"
-                            cancelText="取消"
-                            onConfirm={(event) => {
-                              event?.stopPropagation();
-                              handleDelete(item);
-                            }}
-                            onCancel={(event) => event?.stopPropagation()}
-                          >
-                            <span
-                              className="schedule-session-action"
-                              role="button"
-                              tabIndex={0}
-                              onClick={(event) => event.stopPropagation()}
-                              onKeyDown={(event) => event.stopPropagation()}
-                            >
-                              删除
-                            </span>
-                          </Popconfirm>
-                          </div>
-                        </div>
-                      </React.Fragment>
-                    );
-                  })}
+                  <div className="schedule-period-slots">
+                    <div className={`schedule-period-slot ${daytimeSessions.length ? 'schedule-period-slot-filled' : 'schedule-period-slot-empty'}`}>
+                      {daytimeSessions.map(renderSessionBlock)}
+                    </div>
+                    <div className={`schedule-period-slot ${eveningSessions.length ? 'schedule-period-slot-filled' : 'schedule-period-slot-empty'}`}>
+                      {eveningSessions.map(renderSessionBlock)}
+                    </div>
+                  </div>
                 </div>
               );
             })}
@@ -2149,7 +2242,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                     const influencer = influencers.find((item) => item.id === value || item._id === value);
                     form.setFieldsValue({
                       influencer_name: influencer?.name || undefined,
-                      influencer_commission_rate: influencer?.commission_rate ?? form.getFieldValue('influencer_commission_rate') ?? 0,
+                      influencer_commission_rate: normalizeCommissionRateForDisplay(influencer?.commission_rate ?? form.getFieldValue('influencer_commission_rate') ?? 0),
                     });
                   }}>
                     {influencers.map((item: any) => <Option key={item.id || item._id} value={item.id || item._id}>{item.name} ({item.platform})</Option>)}
@@ -2194,7 +2287,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                         merchant_name: merchant?.name || undefined,
                         brand_category: merchant?.category || undefined,
                         brand_cooperation_mode: merchant?.cooperation_mode || undefined,
-                        brand_commission_rate: merchant?.commission_rate ?? form.getFieldValue('brand_commission_rate') ?? 0,
+                        brand_commission_rate: normalizeCommissionRateForDisplay(merchant?.commission_rate ?? form.getFieldValue('brand_commission_rate') ?? 0),
                       });
                       setBrandSearchText(merchant?.name || '');
                       if (merchant?.cargo_sheet_url) {

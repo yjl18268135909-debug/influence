@@ -23,6 +23,7 @@ create table public.influencers (
   platform text not null,
   name text not null,
   account text not null,
+  tier text,
   agency text,
   single_session_data text,
   product_direction text,
@@ -213,6 +214,26 @@ create table if not exists public.travel_receivables (
 alter table public.travel_receivables add column if not exists received_amount double precision default 0;
 alter table public.travel_receivables add column if not exists payment_notes text;
 alter table public.travel_receivables add column if not exists is_bad_debt boolean default false;
+
+create table if not exists public.travel_payables (
+  id serial primary key,
+  payable_date date not null,
+  payable_type text not null,
+  object_name text,
+  reason text,
+  amount double precision default 0,
+  notes text,
+  paid_amount double precision default 0,
+  payment_notes text,
+  is_paid boolean default false,
+  created_at timestamptz default current_timestamp,
+  updated_at timestamptz default current_timestamp
+);
+
+alter table public.travel_payables add column if not exists paid_amount double precision default 0;
+alter table public.travel_payables add column if not exists payment_notes text;
+alter table public.travel_payables add column if not exists is_paid boolean default false;
+
 alter table public.live_sessions add column if not exists received_amount double precision default 0;
 alter table public.live_sessions add column if not exists payment_notes text;
 alter table public.live_sessions add column if not exists is_bad_debt boolean default false;
@@ -252,6 +273,10 @@ create index if not exists idx_travel_receivables_date on public.travel_receivab
 create index if not exists idx_travel_receivables_type on public.travel_receivables(receivable_type);
 create index if not exists idx_travel_receivables_reason on public.travel_receivables(reason);
 create index if not exists idx_travel_receivables_object on public.travel_receivables(object_name);
+create index if not exists idx_travel_payables_date on public.travel_payables(payable_date);
+create index if not exists idx_travel_payables_type on public.travel_payables(payable_type);
+create index if not exists idx_travel_payables_reason on public.travel_payables(reason);
+create index if not exists idx_travel_payables_object on public.travel_payables(object_name);
 
 alter table public.influencers disable row level security;
 alter table public.merchants disable row level security;
@@ -262,6 +287,7 @@ alter table public.expenses disable row level security;
 alter table public.costs disable row level security;
 alter table public.income disable row level security;
 alter table public.travel_receivables disable row level security;
+alter table public.travel_payables disable row level security;
 alter table public.app_accounts disable row level security;
 
 commit;

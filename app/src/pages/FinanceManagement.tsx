@@ -3,7 +3,7 @@ import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Pop
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { exchangeRateApi, liveSessionApi, travelReceivableApi } from '../api';
+import { exchangeRateApi, liveSessionApi, travelPayableApi, travelReceivableApi } from '../api';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -29,7 +29,15 @@ const TRAVEL_RECEIVABLE_TYPE_OPTIONS = [
   { label: '应收其他', value: 'other' },
 ];
 const DEFAULT_TRAVEL_RECEIVABLE_REASON_OPTIONS = ['机酒费用', '接待费用', '补差价', '退款', '其他'];
+const TRAVEL_PAYABLE_TYPE_OPTIONS = [
+  { label: '应付达人', value: 'influencer' },
+  { label: '应付品牌/商家', value: 'brand' },
+  { label: '应付员工', value: 'employee' },
+  { label: '应付其他', value: 'other' },
+];
+const DEFAULT_TRAVEL_PAYABLE_REASON_OPTIONS = ['达人佣金', '品牌结算', '员工提成', '样品/物流', '投流费用', '机酒成本', '接待费用', '其他'];
 const travelReceivableTypeLabel = (value: string) => TRAVEL_RECEIVABLE_TYPE_OPTIONS.find((item) => item.value === value)?.label || '-';
+const travelPayableTypeLabel = (value: string) => TRAVEL_PAYABLE_TYPE_OPTIONS.find((item) => item.value === value)?.label || '-';
 const receivableObjectLabel: Record<string, string> = {
   influencer: '达人名称',
   brand: '品牌名称',
@@ -80,23 +88,28 @@ const deserializeTravelCostDraft = (values: any) => ({
 interface FinanceManagementProps {
   travelOnly?: boolean;
   receivablesOnly?: boolean;
+  payablesOnly?: boolean;
 }
 
-const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = false, receivablesOnly = false }) => {
+const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = false, receivablesOnly = false, payablesOnly = false }) => {
   const [transactions, setTransactions] = useState(initialTransactions);
   const [travelCostRecords, setTravelCostRecords] = useState<any[]>(() => readStorage(TRAVEL_COST_RECORDS_STORAGE_KEY, []));
   const [travelReceivableRecords, setTravelReceivableRecords] = useState<any[]>([]);
+  const [travelPayableRecords, setTravelPayableRecords] = useState<any[]>([]);
   const [sessions, setSessions] = useState<any[]>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingTravelReceivables, setLoadingTravelReceivables] = useState(false);
+  const [loadingTravelPayables, setLoadingTravelPayables] = useState(false);
   const [loadingExchangeRate, setLoadingExchangeRate] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(DEFAULT_TRAVEL_EXCHANGE_RATE);
   const [exchangeRateMeta, setExchangeRateMeta] = useState<any>({ source: '默认汇率', fallback: true });
   const [open, setOpen] = useState(false);
   const [receivableModalOpen, setReceivableModalOpen] = useState(false);
+  const [payableModalOpen, setPayableModalOpen] = useState(false);
   const [receptionRecord, setReceptionRecord] = useState<any | null>(null);
   const [editingTravelCostRecord, setEditingTravelCostRecord] = useState<any | null>(null);
   const [editingTravelReceivableRecord, setEditingTravelReceivableRecord] = useState<any | null>(null);
+  const [editingTravelPayableRecord, setEditingTravelPayableRecord] = useState<any | null>(null);
   const [editingCollectionDetail, setEditingCollectionDetail] = useState<any | null>(null);
   const [editingReceivableSession, setEditingReceivableSession] = useState<any | null>(null);
   const [receivedStatus, setReceivedStatus] = useState<Record<string, boolean>>(() => readStorage(TRAVEL_RECEIVED_STATUS_STORAGE_KEY, {}));
@@ -104,10 +117,12 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [selectedReceivableDate, setSelectedReceivableDate] = useState<Dayjs>(dayjs());
   const [travelFilters, setTravelFilters] = useState<any>({ month: dayjs() });
   const [receivableReasonFilter, setReceivableReasonFilter] = useState<string | undefined>();
+  const [payableReasonFilter, setPayableReasonFilter] = useState<string | undefined>();
   const [form] = Form.useForm();
   const [travelCostForm] = Form.useForm();
   const [travelCostEditForm] = Form.useForm();
   const [travelReceivableForm] = Form.useForm();
+  const [travelPayableForm] = Form.useForm();
   const [receptionForm] = Form.useForm();
   const [receivableAmountForm] = Form.useForm();
   const [collectionDetailForm] = Form.useForm();
@@ -117,6 +132,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   useEffect(() => {
     fetchSessions();
     fetchTravelReceivables();
+    fetchTravelPayables();
     fetchExchangeRate();
     const draft = readStorage<any | null>(TRAVEL_COST_DRAFT_STORAGE_KEY, null);
     travelCostForm.setFieldsValue({
@@ -187,6 +203,19 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       if (localRecords.length) setTravelReceivableRecords(localRecords);
     } finally {
       setLoadingTravelReceivables(false);
+    }
+  };
+
+  const fetchTravelPayables = async () => {
+    setLoadingTravelPayables(true);
+    try {
+      const res = await travelPayableApi.getAll();
+      setTravelPayableRecords(Array.isArray(res.data?.data) ? res.data.data : []);
+    } catch (error) {
+      console.error('获取应付款项失败:', error);
+      message.error('获取应付款项失败');
+    } finally {
+      setLoadingTravelPayables(false);
     }
   };
 
@@ -389,6 +418,38 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       badDebtTotal,
     };
   }, [travelReceivableRecords, sessions]);
+
+  const isPayablePaid = (record: any) => record?.is_paid === true || Number(record?.is_paid) === 1;
+  const getPaidAmount = (record: any) => Math.min(Number(record?.paid_amount || 0), Number(record?.amount || 0));
+  const getPayableOutstandingAmount = (record: any) => Math.max(Number(record?.amount || 0) - getPaidAmount(record), 0);
+
+  const travelPayableReasonOptions = useMemo(() => {
+    const reasons = travelPayableRecords.map((item) => item.reason).filter(Boolean);
+    return Array.from(new Set([...DEFAULT_TRAVEL_PAYABLE_REASON_OPTIONS, ...reasons])).sort((a, b) => a.localeCompare(b));
+  }, [travelPayableRecords]);
+
+  const filteredTravelPayableRecords = useMemo(
+    () => travelPayableRecords.filter((item) => !payableReasonFilter || item.reason === payableReasonFilter),
+    [travelPayableRecords, payableReasonFilter],
+  );
+
+  const payableReasonFilterTotal = useMemo(
+    () => filteredTravelPayableRecords.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+    [filteredTravelPayableRecords],
+  );
+
+  const payableStats = useMemo(() => {
+    const total = travelPayableRecords.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const paidTotal = travelPayableRecords.reduce((sum, item) => sum + getPaidAmount(item), 0);
+    const settledCount = travelPayableRecords.filter((item) => isPayablePaid(item) || getPayableOutstandingAmount(item) <= 0).length;
+    return {
+      total,
+      paidTotal,
+      outstandingTotal: Math.max(total - paidTotal, 0),
+      settledCount,
+      pendingCount: Math.max(travelPayableRecords.length - settledCount, 0),
+    };
+  }, [travelPayableRecords]);
 
   const resetTravelFilters = () => {
     setTravelFilters({ month: dayjs() });
@@ -693,6 +754,72 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     } catch (error) {
       console.error('删除应收款项失败:', error);
       message.error('删除应收款项失败');
+    }
+  };
+
+  const saveTravelPayableRecord = async () => {
+    try {
+      const values = await travelPayableForm.validateFields();
+      const reason = Array.isArray(values.reason) ? values.reason[0] : values.reason;
+      const amount = Number(values.amount || 0);
+      const paidAmount = Number(values.paid_amount || 0);
+      const payload = {
+        payable_date: values.payable_date?.format('YYYY-MM-DD') || dayjs().format('YYYY-MM-DD'),
+        payable_type: values.payable_type,
+        object_name: values.object_name || '',
+        reason,
+        amount,
+        notes: values.notes || '',
+        paid_amount: paidAmount,
+        payment_notes: values.payment_notes || '',
+        is_paid: values.is_paid === true || values.is_paid === 'yes' || paidAmount >= amount,
+      };
+      const response = editingTravelPayableRecord
+        ? await travelPayableApi.update(editingTravelPayableRecord.id, payload)
+        : await travelPayableApi.create(payload);
+      const savedRecord = response.data?.data;
+
+      setTravelPayableRecords((prev) => (
+        editingTravelPayableRecord
+          ? prev.map((item) => String(item.id) === String(editingTravelPayableRecord.id) ? savedRecord : item)
+          : [savedRecord, ...prev]
+      ));
+      travelPayableForm.resetFields();
+      travelPayableForm.setFieldsValue({ payable_date: dayjs(), payable_type: 'brand', is_paid: false });
+      setEditingTravelPayableRecord(null);
+      setPayableModalOpen(false);
+      message.success(editingTravelPayableRecord ? '应付款项已更新' : '应付款项已新增');
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      console.error('保存应付款项失败:', error);
+      message.error('保存应付款项失败');
+    }
+  };
+
+  const openTravelPayableEditModal = (record: any) => {
+    setEditingTravelPayableRecord(record);
+    travelPayableForm.setFieldsValue({
+      payable_date: record.payable_date ? dayjs(record.payable_date) : dayjs(),
+      payable_type: record.payable_type || 'brand',
+      object_name: record.object_name || '',
+      reason: record.reason ? [record.reason] : undefined,
+      amount: Number(record.amount || 0),
+      notes: record.notes || '',
+      paid_amount: Number(record.paid_amount || 0),
+      payment_notes: record.payment_notes || '',
+      is_paid: isPayablePaid(record),
+    });
+    setPayableModalOpen(true);
+  };
+
+  const deleteTravelPayableRecord = async (id: string) => {
+    try {
+      await travelPayableApi.delete(id);
+      setTravelPayableRecords((prev) => prev.filter((item) => String(item.id) !== String(id)));
+      message.success('应付款项记录已删除');
+    } catch (error) {
+      console.error('删除应付款项失败:', error);
+      message.error('删除应付款项失败');
     }
   };
 
@@ -1537,6 +1664,227 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
     </Modal>
   );
 
+  const renderTravelPayablesOnlyView = () => (
+    <>
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={12} lg={8} xl={6}>
+          <Statistic title="应付合计" value={payableStats.total} precision={2} prefix={TRAVEL_CURRENCY} />
+        </Col>
+        <Col xs={24} sm={12} lg={8} xl={6}>
+          <Statistic title="已付合计" value={payableStats.paidTotal} precision={2} prefix={TRAVEL_CURRENCY} valueStyle={{ color: '#3f8600' }} />
+        </Col>
+        <Col xs={24} sm={12} lg={8} xl={6}>
+          <Statistic title="剩余未付合计" value={payableStats.outstandingTotal} precision={2} prefix={TRAVEL_CURRENCY} valueStyle={{ color: '#cf1322' }} />
+        </Col>
+        <Col xs={24} sm={12} lg={6} xl={3}>
+          <Statistic title="已结清" value={payableStats.settledCount} />
+        </Col>
+        <Col xs={24} sm={12} lg={6} xl={3}>
+          <Statistic title="未结清" value={payableStats.pendingCount} />
+        </Col>
+      </Row>
+
+      <Space style={{ marginBottom: 16 }} wrap>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={() => {
+            setEditingTravelPayableRecord(null);
+            travelPayableForm.resetFields();
+            travelPayableForm.setFieldsValue({ payable_date: dayjs(), payable_type: 'brand', is_paid: false });
+            setPayableModalOpen(true);
+          }}
+        >
+          新增应付款项
+        </Button>
+        <Select
+          allowClear
+          showSearch
+          optionFilterProp="children"
+          placeholder="按款项原因筛选"
+          value={payableReasonFilter}
+          style={{ width: 260 }}
+          onChange={setPayableReasonFilter}
+        >
+          {travelPayableReasonOptions.map((reason) => <Option key={reason} value={reason}>{reason}</Option>)}
+        </Select>
+        <Button onClick={() => setPayableReasonFilter(undefined)}>清除原因筛选</Button>
+        <Statistic
+          title={payableReasonFilter ? `${payableReasonFilter}总计` : '当前列表总计'}
+          value={payableReasonFilterTotal}
+          precision={2}
+          prefix={TRAVEL_CURRENCY}
+        />
+      </Space>
+
+      <Table
+        dataSource={filteredTravelPayableRecords}
+        rowKey="id"
+        loading={loadingTravelPayables}
+        pagination={{ pageSize: 10 }}
+        scroll={{ x: 1300 }}
+        locale={{ emptyText: '暂无应付款项记录' }}
+        columns={[
+          { title: '录入时间', dataIndex: 'created_at', key: 'created_at', width: 170 },
+          { title: '付款日期', dataIndex: 'payable_date', key: 'payable_date', width: 120 },
+          {
+            title: '款项类型',
+            dataIndex: 'payable_type',
+            key: 'payable_type',
+            width: 140,
+            render: (value) => value ? travelPayableTypeLabel(value) : '-',
+          },
+          {
+            title: '款项原因',
+            dataIndex: 'reason',
+            key: 'reason',
+            width: 150,
+            render: (value) => value || '-',
+          },
+          {
+            title: '付款对象',
+            dataIndex: 'object_name',
+            key: 'object_name',
+            width: 160,
+            render: (value) => value || '-',
+          },
+          {
+            title: '应付金额',
+            dataIndex: 'amount',
+            key: 'amount',
+            width: 140,
+            render: (value) => formatTravelMoney(value),
+          },
+          {
+            title: '已付金额',
+            dataIndex: 'paid_amount',
+            key: 'paid_amount',
+            width: 140,
+            render: (_, record) => formatTravelMoney(getPaidAmount(record)),
+          },
+          {
+            title: '剩余未付',
+            key: 'outstanding_amount',
+            width: 140,
+            render: (_, record) => formatTravelMoney(getPayableOutstandingAmount(record)),
+          },
+          {
+            title: '付款状态',
+            key: 'is_paid',
+            width: 110,
+            render: (_, record) => (isPayablePaid(record) || getPayableOutstandingAmount(record) <= 0)
+              ? <Tag color="green">已结清</Tag>
+              : <Tag color="gold">未结清</Tag>,
+          },
+          {
+            title: '款项备注',
+            dataIndex: 'notes',
+            key: 'notes',
+            width: 200,
+            render: (value) => value || '-',
+          },
+          {
+            title: '付款备注',
+            dataIndex: 'payment_notes',
+            key: 'payment_notes',
+            width: 200,
+            render: (value) => value || '-',
+          },
+          {
+            title: '操作',
+            key: 'action',
+            width: 170,
+            fixed: 'right' as const,
+            render: (_, record) => (
+              <Space>
+                <Button type="link" icon={<EditOutlined />} onClick={() => openTravelPayableEditModal(record)}>修改</Button>
+                <Popconfirm title="确定删除这条应付款项记录吗？" onConfirm={() => deleteTravelPayableRecord(record.id)}>
+                  <Button type="link" danger icon={<DeleteOutlined />}>删除</Button>
+                </Popconfirm>
+              </Space>
+            ),
+          },
+        ]}
+      />
+    </>
+  );
+
+  const renderTravelPayableModal = () => (
+    <Modal
+      title={editingTravelPayableRecord ? '修改应付款项' : '新增应付款项'}
+      open={payableModalOpen}
+      onOk={saveTravelPayableRecord}
+      onCancel={() => {
+        setPayableModalOpen(false);
+        setEditingTravelPayableRecord(null);
+        travelPayableForm.resetFields();
+      }}
+      okText="保存"
+      cancelText="取消"
+      width={720}
+    >
+      <Form
+        form={travelPayableForm}
+        layout="vertical"
+        initialValues={{ payable_date: dayjs(), payable_type: 'brand', is_paid: false }}
+      >
+        <Form.Item name="payable_date" label="付款日期" rules={[{ required: true, message: '请选择付款日期' }]}>
+          <DatePicker style={{ width: '100%' }} />
+        </Form.Item>
+        <Form.Item name="payable_type" label="款项类型" rules={[{ required: true, message: '请选择款项类型' }]}>
+          <Select placeholder="请选择应付款项类型">
+            {TRAVEL_PAYABLE_TYPE_OPTIONS.map((item) => <Option key={item.value} value={item.value}>{item.label}</Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="object_name" label="付款对象">
+          <Input placeholder="填写达人、品牌/商家、员工或其他对象" />
+        </Form.Item>
+        <Form.Item name="reason" label="款项原因" rules={[{ required: true, message: '请选择或新增款项原因' }]}>
+          <Select
+            mode="tags"
+            placeholder="选择或输入新的款项原因"
+            maxCount={1}
+            tokenSeparators={[',', '，']}
+            optionFilterProp="children"
+          >
+            {travelPayableReasonOptions.map((reason) => <Option key={reason} value={reason}>{reason}</Option>)}
+          </Select>
+        </Form.Item>
+        <Form.Item name="amount" label="应付金额" rules={[{ required: true, message: '请填写应付金额' }]}>
+          <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
+        </Form.Item>
+        <Form.Item
+          name="paid_amount"
+          label="已付金额"
+          rules={[
+            {
+              validator: (_, value) => {
+                const amount = Number(travelPayableForm.getFieldValue('amount') || 0);
+                return Number(value || 0) <= amount
+                  ? Promise.resolve()
+                  : Promise.reject(new Error('已付金额不能大于应付金额'));
+              },
+            },
+          ]}
+        >
+          <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix={TRAVEL_CURRENCY} onFocus={(event) => event.target.select()} />
+        </Form.Item>
+        <Form.Item name="is_paid" label="是否结清" rules={[{ required: true, message: '请选择是否结清' }]}>
+          <Select>
+            <Option value={false}>否</Option>
+            <Option value={true}>是</Option>
+          </Select>
+        </Form.Item>
+        <Form.Item name="notes" label="款项备注">
+          <Input.TextArea rows={3} placeholder="填写应付款项来源、周期、对应事项或其他说明" />
+        </Form.Item>
+        <Form.Item name="payment_notes" label="付款备注">
+          <Input.TextArea rows={3} placeholder="填写付款时间、方式、流水号或其他说明" />
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+
   const renderTravelFilters = () => (
     <>
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
@@ -1728,6 +2076,16 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         {renderReceivableManagementView()}
         {renderTravelReceivableModal()}
         {renderCollectionDetailModal()}
+      </>
+    );
+  }
+
+  if (payablesOnly) {
+    return (
+      <>
+        <h2 style={{ margin: '0 0 16px' }}>应付管理</h2>
+        {renderTravelPayablesOnlyView()}
+        {renderTravelPayableModal()}
       </>
     );
   }

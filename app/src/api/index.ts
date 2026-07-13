@@ -77,6 +77,12 @@ export const liveSessionApi = {
   delete: (id: number | string) => api.delete(`/live-sessions/${id}`),
 };
 
+// 数据看板相关API
+export const dashboardApi = {
+  getTarget: (params?: any) => api.get('/dashboard-targets', { params }),
+  saveTarget: (data: any) => api.put('/dashboard-targets', data),
+};
+
 // 订单相关API
 export const orderApi = {
   getAll: (params?: any) => api.get('/orders', { params }),
@@ -107,6 +113,14 @@ export const travelReceivableApi = {
   create: (data: any) => api.post('/travel-receivables', data),
   update: (id: number | string, data: any) => api.put(`/travel-receivables/${id}`, data),
   delete: (id: number | string) => api.delete(`/travel-receivables/${id}`),
+};
+
+// 应付款项相关API
+export const travelPayableApi = {
+  getAll: () => api.get('/travel-payables'),
+  create: (data: any) => api.post('/travel-payables', data),
+  update: (id: number | string, data: any) => api.put(`/travel-payables/${id}`, data),
+  delete: (id: number | string) => api.delete(`/travel-payables/${id}`),
 };
 
 // 工作推进相关API

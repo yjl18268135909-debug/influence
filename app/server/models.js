@@ -81,6 +81,7 @@ function normalizeRate(value) {
 }
 
 function exportAllData() {
+  ensureDashboardTargetsTable();
   const tables = [
     'influencers',
     'merchants',
@@ -91,7 +92,9 @@ function exportAllData() {
     'costs',
     'income',
     'travel_receivables',
+    'travel_payables',
     'work_progress_items',
+    'dashboard_targets',
   ];
 
   const data = tables.reduce((result, table) => {
@@ -110,6 +113,105 @@ function exportAllData() {
     database: 'sqlite',
     data,
   };
+}
+
+// ==================== 数据看板目标相关操作 ====================
+
+function ensureDashboardTargetsTable() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dashboard_targets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      scope_key TEXT NOT NULL UNIQUE,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      dimension TEXT DEFAULT 'custom',
+      influencer_id INTEGER,
+      received_target_gmv REAL DEFAULT 0,
+      sales_gmv REAL DEFAULT 0,
+      notes TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+function buildDashboardScopeKey(data = {}) {
+  const dimension = data.dimension || 'custom';
+  const startDate = data.start_date || '';
+  const endDate = data.end_date || '';
+  const influencerId = data.influencer_id === undefined || data.influencer_id === null || data.influencer_id === ''
+    ? 'all'
+    : String(data.influencer_id);
+  return `${dimension}:${startDate}:${endDate}:${influencerId}`;
+}
+
+function normalizeDashboardTarget(data = {}) {
+  const influencerId = data.influencer_id === undefined || data.influencer_id === null || data.influencer_id === ''
+    ? null
+    : Number(data.influencer_id);
+  const item = {
+    start_date: data.start_date,
+    end_date: data.end_date,
+    dimension: data.dimension || 'custom',
+    influencer_id: Number.isFinite(influencerId) ? influencerId : null,
+    received_target_gmv: Number(data.received_target_gmv || 0),
+    sales_gmv: Number(data.sales_gmv || 0),
+    notes: data.notes || null,
+  };
+  return {
+    ...item,
+    scope_key: buildDashboardScopeKey(item),
+  };
+}
+
+function getDashboardTarget(filters = {}) {
+  ensureDashboardTargetsTable();
+  const item = normalizeDashboardTarget(filters);
+  const row = db.prepare('SELECT * FROM dashboard_targets WHERE scope_key = ?').get(item.scope_key);
+  return row || item;
+}
+
+function upsertDashboardTarget(data = {}) {
+  ensureDashboardTargetsTable();
+  const item = normalizeDashboardTarget(data);
+  const existing = db.prepare('SELECT id FROM dashboard_targets WHERE scope_key = ?').get(item.scope_key);
+
+  if (existing) {
+    db.prepare(`
+      UPDATE dashboard_targets
+      SET start_date = ?, end_date = ?, dimension = ?, influencer_id = ?,
+          received_target_gmv = ?, sales_gmv = ?, notes = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE scope_key = ?
+    `).run(
+      item.start_date,
+      item.end_date,
+      item.dimension,
+      item.influencer_id,
+      item.received_target_gmv,
+      item.sales_gmv,
+      item.notes,
+      item.scope_key
+    );
+  } else {
+    db.prepare(`
+      INSERT INTO dashboard_targets (
+        scope_key, start_date, end_date, dimension, influencer_id,
+        received_target_gmv, sales_gmv, notes
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      item.scope_key,
+      item.start_date,
+      item.end_date,
+      item.dimension,
+      item.influencer_id,
+      item.received_target_gmv,
+      item.sales_gmv,
+      item.notes
+    );
+  }
+
+  return db.prepare('SELECT * FROM dashboard_targets WHERE scope_key = ?').get(item.scope_key);
 }
 
 // ==================== 工作推进相关操作 ====================
@@ -329,6 +431,74 @@ function deleteTravelReceivable(id) {
   return { success: true };
 }
 
+// ==================== 应付款项相关操作 ====================
+
+function getTravelPayables() {
+  return db.prepare(`
+    SELECT *
+    FROM travel_payables
+    ORDER BY payable_date DESC, created_at DESC, id DESC
+  `).all();
+}
+
+function createTravelPayable(data) {
+  const stmt = db.prepare(`
+    INSERT INTO travel_payables
+      (payable_date, payable_type, object_name, reason, amount, notes, paid_amount, payment_notes, is_paid)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const result = stmt.run(
+    data.payable_date,
+    data.payable_type,
+    data.object_name || null,
+    data.reason || null,
+    Number(data.amount || 0),
+    data.notes || null,
+    Number(data.paid_amount || 0),
+    data.payment_notes || null,
+    data.is_paid ? 1 : 0
+  );
+  return db.prepare('SELECT * FROM travel_payables WHERE id = ?').get(result.lastInsertRowid);
+}
+
+function updateTravelPayable(id, data) {
+  const current = db.prepare('SELECT * FROM travel_payables WHERE id = ?').get(id);
+  if (!current) return null;
+
+  db.prepare(`
+    UPDATE travel_payables
+    SET payable_date = ?,
+        payable_type = ?,
+        object_name = ?,
+        reason = ?,
+        amount = ?,
+        notes = ?,
+        paid_amount = ?,
+        payment_notes = ?,
+        is_paid = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `).run(
+    data.payable_date,
+    data.payable_type,
+    data.object_name || null,
+    data.reason || null,
+    Number(data.amount || 0),
+    data.notes || null,
+    Number(data.paid_amount || 0),
+    data.payment_notes || null,
+    data.is_paid ? 1 : 0,
+    id
+  );
+
+  return db.prepare('SELECT * FROM travel_payables WHERE id = ?').get(id);
+}
+
+function deleteTravelPayable(id) {
+  db.prepare('DELETE FROM travel_payables WHERE id = ?').run(id);
+  return { success: true };
+}
+
 // ==================== 达人相关操作 ====================
 
 // 获取所有达人
@@ -355,13 +525,14 @@ function getInfluencers(filters = {}) {
 // 创建达人
 function createInfluencer(data) {
   const stmt = db.prepare(`
-    INSERT INTO influencers (platform, name, account, agency, single_session_data, product_direction, commission_rate, contact, sample_address, notes, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO influencers (platform, name, account, tier, agency, single_session_data, product_direction, commission_rate, contact, sample_address, notes, status)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.platform || '',
     data.name,
     data.account,
+    data.tier || null,
     data.agency || null,
     data.single_session_data || null,
     data.product_direction || null,
@@ -378,13 +549,14 @@ function createInfluencer(data) {
 function updateInfluencer(id, data) {
   const stmt = db.prepare(`
     UPDATE influencers
-    SET platform = ?, name = ?, account = ?, agency = ?, single_session_data = ?, product_direction = ?, commission_rate = ?, contact = ?, sample_address = ?, notes = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+    SET platform = ?, name = ?, account = ?, tier = ?, agency = ?, single_session_data = ?, product_direction = ?, commission_rate = ?, contact = ?, sample_address = ?, notes = ?, status = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `);
   stmt.run(
     data.platform || '',
     data.name,
     data.account,
+    data.tier || null,
     data.agency || null,
     data.single_session_data || null,
     data.product_direction || null,
@@ -565,8 +737,22 @@ function getLiveSessions(filters = {}) {
 }
 
 // 创建直播场次
+function normalizeRelationId(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : null;
+}
+
+function getCustomMerchantName(value) {
+  const prefix = '__custom_brand__:';
+  if (typeof value === 'string' && value.startsWith(prefix)) {
+    return value.slice(prefix.length).trim();
+  }
+  return '';
+}
+
 function resolveLiveSessionRelations(data) {
-  let influencerId = data.influencer_id;
+  let influencerId = normalizeRelationId(data.influencer_id);
   if (!influencerId) {
     const placeholderName = '未填写达人';
     const existing = db.prepare("SELECT id FROM influencers WHERE account = 'placeholder_influencer' LIMIT 1").get();
@@ -581,9 +767,9 @@ function resolveLiveSessionRelations(data) {
     }
   }
 
-  let merchantId = data.merchant_id;
+  let merchantId = normalizeRelationId(data.merchant_id);
   if (!merchantId) {
-    const merchantName = data.merchant_name || '未填写品牌';
+    const merchantName = data.merchant_name || getCustomMerchantName(data.merchant_id) || '未填写品牌';
     const existing = db.prepare('SELECT id FROM merchants WHERE name = ? LIMIT 1').get(merchantName);
     if (existing) {
       merchantId = existing.id;
@@ -630,8 +816,8 @@ function createLiveSession(data) {
     data.traffic_plan || null,
     data.estimated_ad_cost || 0,
     data.expected_gmv || 0,
-    data.influencer_commission_rate || 0,
-    data.brand_commission_rate || 0,
+    normalizeRate(data.influencer_commission_rate),
+    normalizeRate(data.brand_commission_rate),
     data.travel_cost_share || 0,
     data.brand_receivable || 0,
     data.owner || null,
@@ -695,8 +881,8 @@ function updateLiveSession(id, data) {
     data.traffic_plan || null,
     data.estimated_ad_cost || 0,
     data.expected_gmv || 0,
-    data.influencer_commission_rate || 0,
-    data.brand_commission_rate || 0,
+    normalizeRate(data.influencer_commission_rate),
+    normalizeRate(data.brand_commission_rate),
     data.travel_cost_share || 0,
     data.brand_receivable || 0,
     data.owner || null,
@@ -1203,10 +1389,16 @@ module.exports = {
   createWorkProgressItem,
   updateWorkProgressItem,
   deleteWorkProgressItem,
+  getDashboardTarget,
+  upsertDashboardTarget,
   getTravelReceivables,
   createTravelReceivable,
   updateTravelReceivable,
   deleteTravelReceivable,
+  getTravelPayables,
+  createTravelPayable,
+  updateTravelPayable,
+  deleteTravelPayable,
   // 达人
   getInfluencers,
   createInfluencer,

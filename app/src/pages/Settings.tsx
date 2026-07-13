@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, Typography, message } from 'antd';
 import { DeleteOutlined, DownloadOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
@@ -14,7 +14,7 @@ type Account = {
   status: string;
 };
 
-const roleOptions = [
+const defaultRoleOptions = [
   { label: '老板', value: '老板' },
   { label: '财务', value: '财务' },
   { label: '运营', value: '运营' },
@@ -40,6 +40,14 @@ const Settings: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm();
 
+  const roleOptions = useMemo(() => {
+    const roles = Array.from(new Set([
+      ...defaultRoleOptions.map((item) => item.value),
+      ...accounts.map((item) => item.role).filter((role): role is string => Boolean(role)),
+    ]));
+    return roles.map((role) => ({ label: role, value: role }));
+  }, [accounts]);
+
   const loadAccounts = async () => {
     setLoading(true);
     try {
@@ -60,25 +68,29 @@ const Settings: React.FC = () => {
   const openCreateModal = () => {
     setEditingAccount(null);
     form.resetFields();
-    form.setFieldsValue({ role: '运营', status: 'active', password: '123456' });
+    form.setFieldsValue({ role: ['运营'], status: 'active', password: '123456' });
     setModalOpen(true);
   };
 
   const openEditModal = (account: Account) => {
     setEditingAccount(account);
     form.resetFields();
-    form.setFieldsValue({ ...account, password: '' });
+    form.setFieldsValue({ ...account, role: account.role ? [account.role] : [], password: '' });
     setModalOpen(true);
   };
 
   const handleSubmit = async (values: any) => {
     setSaving(true);
     try {
+      const normalizedValues = {
+        ...values,
+        role: Array.isArray(values.role) ? values.role[0] : values.role,
+      };
       if (editingAccount) {
-        await accountApi.update(editingAccount.id, values);
+        await accountApi.update(editingAccount.id, normalizedValues);
         message.success('账号已更新');
       } else {
-        await accountApi.create(values);
+        await accountApi.create(normalizedValues);
         message.success('账号已新增');
       }
       setModalOpen(false);
@@ -253,7 +265,14 @@ const Settings: React.FC = () => {
             name="role"
             rules={[{ required: true, message: '请选择权限角色' }]}
           >
-            <Select options={roleOptions} />
+            <Select
+              mode="tags"
+              maxCount={1}
+              allowClear
+              showSearch
+              options={roleOptions}
+              placeholder="请选择或输入权限角色"
+            />
           </Form.Item>
           <Form.Item
             label="账号状态"
