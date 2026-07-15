@@ -62,7 +62,7 @@ const menuItems: MenuItem[] = [
   { key: '/employees', icon: <TeamOutlined />, label: '员工管理' },
   { key: '/work-progress', icon: <ProjectOutlined />, label: '工作推进' },
   { key: '/finance', icon: <WalletOutlined />, label: '财务管理', hiddenForOperator: true },
-  { key: '/settings', icon: <SettingOutlined />, label: '设置' },
+  { key: '/settings', icon: <SettingOutlined />, label: '设置', hiddenForOperator: true },
 ];
 
 const readStorage = <T,>(key: string, fallback: T): T => {
@@ -147,14 +147,14 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
     return true;
   });
   const defaultRoute = visibleMenuItems[0]?.key || '/schedule-communication';
-  const restrictedFinanceRoutes = ['/finance'];
+  const restrictedOperatorRoutes = ['/finance', '/settings'];
 
   const {
     token: { colorBgContainer, borderRadiusLG },
   } = theme.useToken();
 
   useEffect(() => {
-    if (!canViewFinance(currentUser) && restrictedFinanceRoutes.includes(location.pathname)) {
+    if (!canViewFinance(currentUser) && restrictedOperatorRoutes.includes(location.pathname)) {
       navigate(defaultRoute, { replace: true });
       return;
     }
