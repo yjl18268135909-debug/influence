@@ -3,7 +3,7 @@ import { Badge, Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Mod
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import { liveSessionApi } from '../api';
+import { employeeManagementApi, liveSessionApi } from '../api';
 import { defaultEmployees, EMPLOYEES_STORAGE_KEY } from '../data/employees';
 
 const { Option } = Select;
@@ -120,6 +120,7 @@ const EmployeeManagement: React.FC = () => {
   const [performanceRecords, setPerformanceRecords] = useState<PerformanceRecord[]>(() => readStorage(PERFORMANCE_STORAGE_KEY, []));
   const [scores, setScores] = useState<ScoreRecord[]>(() => readStorage(SCORES_STORAGE_KEY, []));
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>(() => readStorage(ATTENDANCE_STORAGE_KEY, []));
+  const [employeeDataReady, setEmployeeDataReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
@@ -142,7 +143,42 @@ const EmployeeManagement: React.FC = () => {
 
   useEffect(() => {
     fetchSessions();
+    fetchEmployeeManagementData();
   }, []);
+
+  const buildEmployeeManagementPayload = () => ({
+    employees,
+    leaves,
+    leaveOverrides,
+    performanceRecords,
+    scores,
+    attendanceRecords,
+  });
+
+  const applyEmployeeManagementData = (data: any) => {
+    if (Array.isArray(data?.employees)) setEmployees(data.employees);
+    if (Array.isArray(data?.leaves)) setLeaves(data.leaves);
+    if (data?.leaveOverrides && typeof data.leaveOverrides === 'object') setLeaveOverrides(data.leaveOverrides);
+    if (Array.isArray(data?.performanceRecords)) setPerformanceRecords(data.performanceRecords);
+    if (Array.isArray(data?.scores)) setScores(data.scores);
+    if (Array.isArray(data?.attendanceRecords)) setAttendanceRecords(data.attendanceRecords);
+  };
+
+  const fetchEmployeeManagementData = async () => {
+    try {
+      const res = await employeeManagementApi.getData();
+      const remoteData = res.data?.data;
+      if (remoteData) {
+        applyEmployeeManagementData(remoteData);
+      } else {
+        await employeeManagementApi.saveData(buildEmployeeManagementPayload());
+      }
+      setEmployeeDataReady(true);
+    } catch (error) {
+      console.error('获取员工管理数据失败:', error);
+      message.error('员工管理数据暂时无法同步到其他电脑');
+    }
+  };
 
   useEffect(() => {
     localStorage.setItem(EMPLOYEES_STORAGE_KEY, JSON.stringify(employees));
@@ -167,6 +203,19 @@ const EmployeeManagement: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(ATTENDANCE_STORAGE_KEY, JSON.stringify(attendanceRecords));
   }, [attendanceRecords]);
+
+  useEffect(() => {
+    if (!employeeDataReady) return;
+
+    const timer = window.setTimeout(() => {
+      employeeManagementApi.saveData(buildEmployeeManagementPayload()).catch((error) => {
+        console.error('同步员工管理数据失败:', error);
+        message.error('员工管理数据同步失败，请检查网络或刷新后重试');
+      });
+    }, 400);
+
+    return () => window.clearTimeout(timer);
+  }, [attendanceRecords, employeeDataReady, employees, leaveOverrides, leaves, performanceRecords, scores]);
 
   const fetchSessions = async () => {
     setLoading(true);
@@ -246,7 +295,7 @@ const EmployeeManagement: React.FC = () => {
   const openCreateEmployeeModal = () => {
     setEditingEmployee(null);
     employeeForm.resetFields();
-    employeeForm.setFieldsValue({ status: 'active' });
+    employeeForm.setFieldsValue({ role: [], status: 'active' });
     setEmployeeModalOpen(true);
   };
 
@@ -254,30 +303,37 @@ const EmployeeManagement: React.FC = () => {
     setEditingEmployee(employee);
     employeeForm.setFieldsValue({
       ...employee,
+      role: employee.role ? [employee.role] : [],
       hireDate: employee.hireDate ? dayjs(employee.hireDate) : undefined,
     });
     setEmployeeModalOpen(true);
   };
 
   const saveEmployee = async () => {
-    const values = await employeeForm.validateFields();
-    const roleName = Array.isArray(values.role) ? values.role[0] : values.role;
-    const payload = {
-      ...values,
-      role: roleName,
-      hireDate: values.hireDate ? values.hireDate.format('YYYY-MM-DD') : undefined,
-      status: values.status || 'active',
-    };
-    if (editingEmployee) {
-      setEmployees((prev) => prev.map((item) => item.id === editingEmployee.id ? { ...item, ...payload } : item));
-      message.success('员工档案已更新');
-    } else {
-      setEmployees((prev) => [{ ...payload, id: `E${Date.now()}` }, ...prev]);
-      message.success('员工已添加');
+    try {
+      const values = await employeeForm.validateFields();
+      const roleName = Array.isArray(values.role) ? values.role[0] : values.role;
+      const payload = {
+        ...values,
+        role: roleName,
+        hireDate: values.hireDate ? values.hireDate.format('YYYY-MM-DD') : undefined,
+        status: values.status || 'active',
+      };
+      if (editingEmployee) {
+        setEmployees((prev) => prev.map((item) => item.id === editingEmployee.id ? { ...item, ...payload } : item));
+        message.success('员工档案已更新');
+      } else {
+        setEmployees((prev) => [{ ...payload, id: `E${Date.now()}` }, ...prev]);
+        message.success('员工已添加');
+      }
+      setEmployeeModalOpen(false);
+      setEditingEmployee(null);
+      employeeForm.resetFields();
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      console.error('保存员工失败:', error);
+      message.error('保存员工失败，请稍后重试');
     }
-    setEmployeeModalOpen(false);
-    setEditingEmployee(null);
-    employeeForm.resetFields();
   };
 
   const deleteEmployee = (employee: Employee) => {
@@ -392,6 +448,199 @@ const EmployeeManagement: React.FC = () => {
     });
     setScoreModalOpen(true);
   };
+
+  const getMonthlyAttendanceRecord = (employeeName: string) => {
+    const month = selectedMonth.format('YYYY-MM');
+    return attendanceRecords.find((item) => item.employeeName === employeeName && item.month === month);
+  };
+
+  const upsertAttendanceRecord = (employeeName: string, values: Partial<AttendanceRecord>) => {
+    const month = selectedMonth.format('YYYY-MM');
+    setAttendanceRecords((prev) => {
+      const current = prev.find((item) => item.employeeName === employeeName && item.month === month);
+      const nextRecord: AttendanceRecord = {
+        id: current?.id || `A${Date.now()}`,
+        employeeName,
+        month,
+        manualAttendanceDays: Number(values.manualAttendanceDays ?? current?.manualAttendanceDays ?? 0),
+        manualLeaveDays: Number(values.manualLeaveDays ?? current?.manualLeaveDays ?? 0),
+        notes: values.notes ?? current?.notes,
+      };
+      return [nextRecord, ...prev.filter((item) => !(item.employeeName === employeeName && item.month === month))];
+    });
+  };
+
+  const getMonthlyScoreRecord = (employeeName: string) => {
+    const month = selectedMonth.format('YYYY-MM');
+    return scores.find((item) => item.employeeName === employeeName && item.month === month);
+  };
+
+  const upsertScoreRecord = (employeeName: string, values: Partial<ScoreRecord>) => {
+    const month = selectedMonth.format('YYYY-MM');
+    setScores((prev) => {
+      const current = prev.find((item) => item.employeeName === employeeName && item.month === month);
+      const nextRecord: ScoreRecord = {
+        id: current?.id || `R${Date.now()}`,
+        employeeName,
+        month,
+        score: Number(values.score ?? current?.score ?? 0),
+        notes: values.notes ?? current?.notes,
+      };
+      return [nextRecord, ...prev.filter((item) => !(item.employeeName === employeeName && item.month === month))];
+    });
+  };
+
+  const getMonthlyPerformanceContent = (employeeName: string, type: PerformanceRecord['type']) => {
+    return performanceRecords
+      .filter((item) => item.employeeName === employeeName && item.type === type && dayjs(item.date).isSame(selectedMonth, 'month'))
+      .map((item) => item.content)
+      .filter(Boolean)
+      .join('\n');
+  };
+
+  const upsertMonthlyPerformanceContent = (employeeName: string, type: PerformanceRecord['type'], content: string) => {
+    const trimmedContent = content.trim();
+    setPerformanceRecords((prev) => {
+      const rest = prev.filter((item) => !(item.employeeName === employeeName && item.type === type && dayjs(item.date).isSame(selectedMonth, 'month')));
+      if (!trimmedContent) return rest;
+      return [{
+        id: `P${Date.now()}`,
+        employeeName,
+        date: selectedMonth.startOf('month').format('YYYY-MM-DD'),
+        type,
+        content: trimmedContent,
+      }, ...rest];
+    });
+  };
+
+  const renderManagementRecordView = () => (
+    <Table
+      dataSource={employees}
+      rowKey="id"
+      pagination={false}
+      scroll={{ x: 940 }}
+      columns={[
+        {
+          title: '员工',
+          dataIndex: 'name',
+          key: 'name',
+          width: 120,
+          fixed: 'left' as const,
+        },
+        {
+          title: '岗位',
+          dataIndex: 'role',
+          key: 'role',
+          width: 120,
+          render: (value) => <Tag color="blue">{value}</Tag>,
+        },
+        {
+          title: '月份',
+          key: 'month',
+          width: 110,
+          render: () => selectedMonth.format('YYYY-MM'),
+        },
+        {
+          title: '补录出勤',
+          key: 'manualAttendanceDays',
+          width: 120,
+          render: (_, record) => (
+            <InputNumber
+              min={0}
+              precision={1}
+              className="employee-record-number"
+              value={getMonthlyAttendanceRecord(record.name)?.manualAttendanceDays || 0}
+              onChange={(value) => upsertAttendanceRecord(record.name, { manualAttendanceDays: Number(value || 0) })}
+            />
+          ),
+        },
+        {
+          title: '补录休假',
+          key: 'manualLeaveDays',
+          width: 120,
+          render: (_, record) => (
+            <InputNumber
+              min={0}
+              precision={1}
+              className="employee-record-number"
+              value={getMonthlyAttendanceRecord(record.name)?.manualLeaveDays || 0}
+              onChange={(value) => upsertAttendanceRecord(record.name, { manualLeaveDays: Number(value || 0) })}
+            />
+          ),
+        },
+        {
+          title: '实际出勤',
+          key: 'actualAttendance',
+          width: 100,
+          render: (_, record) => employeeStats.find((item) => item.id === record.id)?.actualAttendance ?? 0,
+        },
+        {
+          title: '实际休假',
+          key: 'actualLeave',
+          width: 100,
+          render: (_, record) => employeeStats.find((item) => item.id === record.id)?.actualLeave ?? 0,
+        },
+        {
+          title: '绩效分',
+          key: 'score',
+          width: 110,
+          render: (_, record) => (
+            <InputNumber
+              min={0}
+              max={100}
+              precision={0}
+              className="employee-record-number"
+              value={getMonthlyScoreRecord(record.name)?.score}
+              placeholder="未评分"
+              onChange={(value) => upsertScoreRecord(record.name, { score: Number(value || 0) })}
+            />
+          ),
+        },
+        {
+          title: '考勤备注',
+          key: 'attendanceNotes',
+          width: 220,
+          render: (_, record) => (
+            <TextArea
+              className="employee-record-textarea"
+              defaultValue={getMonthlyAttendanceRecord(record.name)?.notes}
+              rows={2}
+              placeholder="出勤/休假补充"
+              onBlur={(event) => upsertAttendanceRecord(record.name, { notes: event.target.value })}
+            />
+          ),
+        },
+        {
+          title: '绩效问题',
+          key: 'mistakeRecord',
+          width: 240,
+          render: (_, record) => (
+            <TextArea
+              className="employee-record-textarea"
+              defaultValue={getMonthlyPerformanceContent(record.name, 'mistake')}
+              rows={2}
+              placeholder="本月绩效问题"
+              onBlur={(event) => upsertMonthlyPerformanceContent(record.name, 'mistake', event.target.value)}
+            />
+          ),
+        },
+        {
+          title: '评分备注',
+          key: 'scoreNotes',
+          width: 220,
+          render: (_, record) => (
+            <TextArea
+              className="employee-record-textarea"
+              defaultValue={getMonthlyScoreRecord(record.name)?.notes}
+              rows={2}
+              placeholder="绩效评分说明"
+              onBlur={(event) => upsertScoreRecord(record.name, { notes: event.target.value })}
+            />
+          ),
+        },
+      ]}
+    />
+  );
 
   const openLeaveDayModal = (date: Dayjs) => {
     const dateKey = date.format('YYYY-MM-DD');
@@ -613,7 +862,7 @@ const EmployeeManagement: React.FC = () => {
                         { title: '时间', dataIndex: 'session_date', key: 'session_date', render: formatSessionDate },
                         { title: '达人', dataIndex: 'influencer_name', key: 'influencer_name', render: (value) => value || '未填写' },
                         { title: '品牌', dataIndex: 'merchant_name', key: 'merchant_name', render: (value) => value || '未填写' },
-                        { title: '身份', key: 'roleInSession', render: (_, item: any) => item.owner === record.name ? '负责人' : '助播' },
+                        { title: '身份', key: 'roleInSession', render: (_, item: any) => item.owner === record.name ? '中控' : '助播' },
                         { title: '目标GMV', dataIndex: 'expected_gmv', key: 'expected_gmv', render: formatMoney },
                         { title: '本场GMV', dataIndex: 'actual_gmv_sgd', key: 'actual_gmv_sgd', render: formatMoney },
                         { title: '状态', dataIndex: 'status', key: 'status' },
@@ -682,6 +931,11 @@ const EmployeeManagement: React.FC = () => {
               />
             ),
           },
+          {
+            key: 'management-records',
+            label: '员工管理记录',
+            children: renderManagementRecordView(),
+          },
         ]}
       />
 
@@ -693,7 +947,6 @@ const EmployeeManagement: React.FC = () => {
           <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}><Input /></Form.Item>
           <Form.Item name="role" label="岗位" rules={[{ required: true, message: '请选择岗位' }]}>
             <Select mode="tags" maxCount={1} placeholder="请选择或新增岗位">
-              <Option value="负责人">负责人</Option>
               <Option value="店铺运营">店铺运营</Option>
               <Option value="中控">中控</Option>
               <Option value="达人运营">达人运营</Option>
@@ -714,8 +967,8 @@ const EmployeeManagement: React.FC = () => {
           <div>合作模式：{assigningSession?.brand_cooperation_mode || '未填写合作模式'}</div>
         </Space>
         <Form form={assignForm} layout="vertical">
-          <Form.Item name="owner" label="负责人">
-            <Select allowClear showSearch optionFilterProp="children" placeholder="请选择负责人">
+          <Form.Item name="owner" label="中控">
+            <Select allowClear showSearch optionFilterProp="children" placeholder="请选择中控">
               {employeeOptions}
             </Select>
           </Form.Item>

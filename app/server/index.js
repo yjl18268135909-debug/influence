@@ -172,6 +172,16 @@ app.get('/api/export/all', asyncRoute(async (req, res) => {
   res.json(data);
 }));
 
+app.get('/api/employee-management-data', asyncRoute(async (req, res) => {
+  const data = await models.getEmployeeManagementData();
+  res.json({ success: true, data });
+}));
+
+app.put('/api/employee-management-data', asyncRoute(async (req, res) => {
+  const data = await models.saveEmployeeManagementData(req.body || {});
+  res.json({ success: true, data });
+}));
+
 app.get('/api/influencers', asyncRoute(async (req, res) => {
   const data = await models.getInfluencers({
     status: req.query.status,

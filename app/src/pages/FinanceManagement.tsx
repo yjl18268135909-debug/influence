@@ -617,15 +617,20 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       .sort((a, b) => dayjs(a.session_date).valueOf() - dayjs(b.session_date).valueOf());
   };
 
-  const getBrandAllocationRows = () => filteredTravelCostRecords.map((record) => {
+  const getRecordTravelReceivableTotals = (record: any) => {
     const receivableSessions = getRecordReceivableSessions(record);
+    const actualReceivableTotal = receivableSessions.reduce((sum, item) => sum + Number(item.brand_receivable || 0), 0);
+    const actualReceivedTotal = receivableSessions
+      .filter((item) => receivedStatus[getSessionReceivedKey(item)])
+      .reduce((sum, item) => sum + Number(item.brand_receivable || 0), 0);
+    return { receivableSessions, actualReceivableTotal, actualReceivedTotal };
+  };
+
+  const getBrandAllocationRows = () => filteredTravelCostRecords.map((record) => {
+    const { receivableSessions, actualReceivableTotal, actualReceivedTotal } = getRecordTravelReceivableTotals(record);
     const receivableBrandCount = new Set(receivableSessions
       .filter((item) => Number(item.brand_receivable || 0) > 0)
       .map(sessionBrand)).size;
-    const actualReceivableTotal = receivableSessions.reduce((sum, item) => sum + Number(item.brand_receivable || 0), 0);
-    const receivedTotal = receivableSessions
-      .filter((item) => receivedStatus[getSessionReceivedKey(item)])
-      .reduce((sum, item) => sum + Number(item.brand_receivable || 0), 0);
     return {
       key: record.id,
       record_id: record.id,
@@ -637,7 +642,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       per_tap_flight_hotel_cost: Number(record.per_tap_flight_hotel_cost || 0),
       receivable_brand_count: receivableBrandCount,
       actual_receivable_total: actualReceivableTotal,
-      actual_received_total: receivedTotal,
+      actual_received_total: actualReceivedTotal,
       currency: TRAVEL_CURRENCY,
       sessions: receivableSessions,
     };
@@ -1081,7 +1086,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       dataSource={filteredTravelCostRecords}
       rowKey="id"
       pagination={{ pageSize: 10 }}
-      scroll={{ x: 1850 }}
+      scroll={{ x: 2150 }}
       locale={{ emptyText: '暂无达人行程成本录入记录' }}
       columns={[
         { title: '录入时间', dataIndex: 'created_at', key: 'created_at', width: 160 },
@@ -1129,6 +1134,18 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         { title: '内部团队差旅费用（机票+酒店）', dataIndex: 'internal_team_travel_cost', key: 'internal_team_travel_cost', width: 220, render: (value) => formatTravelMoney(value) },
         { title: '自动总成本（新币）', key: 'total_cost_sgd', width: 160, render: (_, record) => formatTravelSgdMoney(record.total_cost || getRecordTotalCost(record), record, exchangeRate) },
         { title: '自动总成本（人民币）', dataIndex: 'total_cost', key: 'total_cost', width: 170, render: (value, record) => formatTravelMoney(value || getRecordTotalCost(record)) },
+        {
+          title: '实际应收机酒合计',
+          key: 'actual_receivable_total',
+          width: 170,
+          render: (_, record) => formatTravelMoney(getRecordTravelReceivableTotals(record).actualReceivableTotal),
+        },
+        {
+          title: '实际已收机酒合计',
+          key: 'actual_received_total',
+          width: 170,
+          render: (_, record) => formatTravelMoney(getRecordTravelReceivableTotals(record).actualReceivedTotal),
+        },
         {
           title: '操作',
           key: 'action',

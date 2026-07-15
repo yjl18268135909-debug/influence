@@ -131,6 +131,12 @@ export const workProgressApi = {
   delete: (id: number | string) => api.delete(`/work-progress/${id}`),
 };
 
+// 员工管理相关API
+export const employeeManagementApi = {
+  getData: () => api.get('/employee-management-data'),
+  saveData: (data: any) => api.put('/employee-management-data', data),
+};
+
 // 汇率相关API
 export const exchangeRateApi = {
   getSgdToCny: () => api.get('/exchange-rate', { params: { from: 'SGD', to: 'CNY' } }),

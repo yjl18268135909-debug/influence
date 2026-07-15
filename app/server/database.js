@@ -160,6 +160,7 @@ function initDatabase() {
   ensureColumn('live_sessions', 'execution_notes', 'TEXT');
   ensureColumn('live_sessions', 'cost_notes', 'TEXT');
   ensureColumn('live_sessions', 'actual_gmv_sgd', 'REAL DEFAULT 0');
+  ensureColumn('live_sessions', 'actual_received_gmv_sgd', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'big_screen_screenshot', 'TEXT');
   ensureColumn('live_sessions', 'actual_traffic_usd', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'screen_traffic_sgd', 'REAL DEFAULT 0');

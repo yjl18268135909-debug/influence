@@ -73,6 +73,49 @@ async function ensureAccountsTable() {
   }
 }
 
+async function ensureEmployeeManagementDataTable() {
+  await query(`
+    CREATE TABLE IF NOT EXISTS employee_management_data (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+function normalizeEmployeeManagementPayload(data = {}) {
+  return {
+    employees: Array.isArray(data.employees) ? data.employees : [],
+    leaves: Array.isArray(data.leaves) ? data.leaves : [],
+    leaveOverrides: data.leaveOverrides && typeof data.leaveOverrides === 'object' ? data.leaveOverrides : {},
+    performanceRecords: Array.isArray(data.performanceRecords) ? data.performanceRecords : [],
+    scores: Array.isArray(data.scores) ? data.scores : [],
+    attendanceRecords: Array.isArray(data.attendanceRecords) ? data.attendanceRecords : [],
+  };
+}
+
+async function getEmployeeManagementData() {
+  await ensureEmployeeManagementDataTable();
+  const row = await one('SELECT data, updated_at FROM employee_management_data WHERE id = 1');
+  if (!row) return null;
+  return {
+    ...(row.data || {}),
+    updated_at: row.updated_at,
+  };
+}
+
+async function saveEmployeeManagementData(data = {}) {
+  await ensureEmployeeManagementDataTable();
+  const payload = normalizeEmployeeManagementPayload(data);
+  await query(
+    `INSERT INTO employee_management_data (id, data, updated_at)
+     VALUES (1, $1::jsonb, CURRENT_TIMESTAMP)
+     ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data, updated_at = CURRENT_TIMESTAMP`,
+    [JSON.stringify(payload)]
+  );
+  return getEmployeeManagementData();
+}
+
 async function ensureTravelReceivablesTable() {
   await query(`
     CREATE TABLE IF NOT EXISTS travel_receivables (
@@ -177,6 +220,7 @@ async function ensureLiveSessionColumns() {
       ADD COLUMN IF NOT EXISTS execution_notes TEXT,
       ADD COLUMN IF NOT EXISTS cost_notes TEXT,
       ADD COLUMN IF NOT EXISTS actual_gmv_sgd DOUBLE PRECISION DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS actual_received_gmv_sgd DOUBLE PRECISION DEFAULT 0,
       ADD COLUMN IF NOT EXISTS big_screen_screenshot TEXT,
       ADD COLUMN IF NOT EXISTS actual_traffic_usd DOUBLE PRECISION DEFAULT 0,
       ADD COLUMN IF NOT EXISTS screen_traffic_sgd DOUBLE PRECISION DEFAULT 0,
@@ -292,6 +336,7 @@ async function exportAllData() {
   await ensureTravelReceivablesTable();
   await ensureWorkProgressTable();
   await ensureDashboardTargetsTable();
+  await ensureEmployeeManagementDataTable();
   await ensureMerchantColumns();
   const tables = [
     'influencers',
@@ -306,6 +351,7 @@ async function exportAllData() {
     'travel_payables',
     'work_progress_items',
     'dashboard_targets',
+    'employee_management_data',
   ];
 
   const data = {};
@@ -1035,7 +1081,7 @@ const liveSessionColumns = [
   'status', 'notes', 'cargo_sheet', 'traffic_plan', 'estimated_ad_cost', 'expected_gmv', 'influencer_commission_rate',
   'brand_commission_rate', 'travel_cost_share', 'brand_receivable', 'owner', 'assistant', 'live_city', 'live_venue', 'live_network', 'samples', 'schedule_type',
   'influencer_travel_note', 'schedule_other_note', 'brand_category', 'brand_cooperation_mode', 'plan_notes',
-  'execution_notes', 'cost_notes', 'actual_gmv_sgd', 'big_screen_screenshot', 'actual_traffic_usd',
+  'execution_notes', 'cost_notes', 'actual_gmv_sgd', 'actual_received_gmv_sgd', 'big_screen_screenshot', 'actual_traffic_usd',
   'screen_traffic_sgd', 'actual_traffic_provider', 'traffic_receivable_type', 'traffic_receivable_amount',
   'traffic_notes', 'post_live_notes', 'received_amount', 'payment_notes', 'is_bad_debt',
 ];
@@ -1075,6 +1121,7 @@ function liveSessionValues(data, influencerId, merchantId) {
     data.execution_notes || null,
     data.cost_notes || null,
     data.actual_gmv_sgd || 0,
+    data.actual_received_gmv_sgd || 0,
     data.big_screen_screenshot || null,
     data.actual_traffic_usd || 0,
     data.screen_traffic_sgd || 0,
@@ -1475,6 +1522,8 @@ module.exports = {
   updateAccount,
   deleteAccount,
   exportAllData,
+  getEmployeeManagementData,
+  saveEmployeeManagementData,
   getWorkProgressItems,
   createWorkProgressItem,
   updateWorkProgressItem,

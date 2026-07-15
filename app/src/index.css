@@ -176,6 +176,181 @@ code {
   line-height: 18px;
 }
 
+.post-data-grid {
+  display: grid;
+  overflow-x: auto;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+}
+
+.post-data-total-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 8px;
+}
+
+.post-data-total-cell strong,
+.post-data-total-cell span {
+  display: block;
+  white-space: nowrap;
+}
+
+.post-data-total-cell strong {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.post-data-total-cell span {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.post-data-grid-cell {
+  min-height: 132px;
+  padding: 8px;
+  border-right: 1px solid #f0f0f0;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+}
+
+.post-data-grid-cell-filled {
+  background: #fbfffa;
+}
+
+.post-data-session-card {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 8px;
+  color: rgba(0, 0, 0, 0.76);
+  text-align: left;
+  background: #f6ffed;
+  border: 1px solid #b7eb8f;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.post-data-session-card:hover {
+  background: #efffe4;
+  border-color: #52c41a;
+}
+
+.post-data-session-card-selected {
+  background: #e6f4ff;
+  border-color: #1677ff;
+  box-shadow: 0 0 0 1px #1677ff inset;
+}
+
+.post-data-session-card:last-child {
+  margin-bottom: 0;
+}
+
+.post-data-period-slots .post-data-session-card {
+  margin-bottom: 0;
+}
+
+.post-data-session-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.post-data-session-title strong {
+  min-width: 0;
+  color: #237804;
+  font-size: 13px;
+  line-height: 18px;
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.post-data-session-title span {
+  flex: 0 0 auto;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.post-data-metrics {
+  display: grid;
+  gap: 3px;
+}
+
+.post-data-metrics span {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  color: rgba(0, 0, 0, 0.58);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.post-data-metrics strong {
+  min-width: 0;
+  flex: 0 0 auto;
+  color: rgba(0, 0, 0, 0.82);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.post-data-editable-metric {
+  cursor: pointer;
+}
+
+.post-data-editable-metric:hover {
+  color: #1677ff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.post-data-inline-editor {
+  display: grid;
+  grid-template-columns: auto minmax(116px, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  color: rgba(0, 0, 0, 0.58);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.post-data-inline-editor .ant-input-number {
+  min-width: 0;
+}
+
+.post-data-detail-section {
+  margin-top: 18px;
+}
+
+.post-data-detail-section h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.post-data-detail-section .ant-table-cell {
+  white-space: nowrap;
+}
+
 .receivable-calendar-cell {
   display: flex;
   flex-direction: column;
@@ -393,6 +568,9 @@ code {
 }
 
 .schedule-day-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-height: 86px;
   padding: 8px;
   border-right: 1px solid #f0f0f0;
@@ -410,7 +588,6 @@ code {
   align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
-  margin-bottom: 6px;
   padding: 4px 6px;
   color: #cf1322;
   font-size: 12px;
@@ -420,6 +597,11 @@ code {
   border: 1px solid #ffa39e;
   border-radius: 6px;
   cursor: default;
+}
+
+.schedule-travel-note-area {
+  display: grid;
+  gap: 6px;
 }
 
 .schedule-travel-note span {
@@ -457,16 +639,37 @@ code {
 
 .schedule-period-slots {
   display: grid;
-  grid-template-rows: minmax(96px, auto) minmax(96px, auto);
   gap: 8px;
 }
 
+.schedule-period-slots-split {
+  grid-template-rows: minmax(176px, auto) minmax(176px, auto);
+}
+
+.schedule-period-slots-single {
+  grid-template-rows: auto;
+}
+
 .schedule-period-slot {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 6px;
   min-width: 0;
 }
 
-.schedule-period-slot-empty {
-  min-height: 96px;
+.schedule-period-slots-split .schedule-period-slot {
+  min-height: 176px;
+}
+
+.schedule-period-slot-evening {
+  padding-top: 8px;
+  border-top: 1px dashed #e5e7eb;
+}
+
+.schedule-period-slot-evening-only {
+  padding-top: 0;
+  border-top: 0;
 }
 
 .schedule-period-slot .schedule-session-block:last-child {
@@ -539,9 +742,13 @@ code {
   font-weight: 600;
   line-height: 18px;
   overflow: visible !important;
-  white-space: normal !important;
-  overflow-wrap: anywhere;
+  white-space: nowrap !important;
   text-overflow: clip !important;
+}
+
+.schedule-session-estimated-profit {
+  color: rgba(0, 0, 0, 0.78);
+  font-weight: 600;
 }
 
 .schedule-session-editable-field {
@@ -580,6 +787,18 @@ code {
 .schedule-session-block span {
   margin-top: 3px;
   font-size: 12px;
+}
+
+.schedule-session-block .schedule-session-estimated-profit {
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.schedule-session-block .schedule-session-metric-field {
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
 }
 
 .employee-calendar-cell {
@@ -684,6 +903,15 @@ code {
 .employee-session-title .ant-tag {
   flex: 0 0 auto;
   white-space: nowrap;
+}
+
+.employee-record-number {
+  width: 100%;
+}
+
+.employee-record-textarea {
+  width: 100%;
+  resize: vertical;
 }
 
 .merchant-intro-section {

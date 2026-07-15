@@ -195,7 +195,7 @@ const communicationExportFieldOptions = [
   { label: '预计投放费用', value: 'estimated_ad_cost' },
   { label: '直播时长', value: 'duration_hours' },
   { label: '货盘表', value: 'cargo_sheet' },
-  { label: '负责人', value: 'owner' },
+  { label: '中控', value: 'owner' },
   { label: '助播', value: 'assistant' },
   { label: '直播城市', value: 'live_city' },
   { label: '直播场地', value: 'live_venue' },
@@ -222,7 +222,7 @@ const scheduleImportTemplateHeaders = [
   '预计投放费用',
   '直播时长',
   '货盘表',
-  '负责人',
+  '中控',
   '助播',
   '直播城市',
   '直播场地',
@@ -238,7 +238,7 @@ interface LiveSessionsProps {
 }
 
 type SessionFilters = { influencer?: string; brand?: string; city?: string };
-type InlineScheduleField = 'live_venue' | 'owner' | 'assistant';
+type InlineScheduleField = 'live_venue' | 'owner' | 'assistant' | 'expected_gmv' | 'travel_cost_share' | 'brand_commission_rate' | 'influencer_commission_rate' | 'actual_gmv_sgd' | 'actual_received_gmv_sgd';
 
 const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }) => {
   const navigate = useNavigate();
@@ -255,7 +255,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const [editingSession, setEditingSession] = useState<any | null>(null);
   const [showPostDataSection, setShowPostDataSection] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
-  const [timelineWeek, setTimelineWeek] = useState<Dayjs>(dayjs().startOf('month'));
+  const [timelineWeek, setTimelineWeek] = useState<Dayjs>(dayjs().startOf('day'));
+  const [selectedPostDataSessionKey, setSelectedPostDataSessionKey] = useState<string | null>(null);
   const [filtersByScope, setFiltersByScope] = useState<Record<string, SessionFilters>>({
     management: {},
     communication: {},
@@ -387,8 +388,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   };
 
   const timelineDays = useMemo(() => {
-    const start = timelineWeek.startOf('month');
-    const days = start.add(1, 'month').diff(start, 'day') + 1;
+    const start = timelineWeek.startOf('day');
+    const days = 31;
     return Array.from({ length: days }, (_, index) => start.add(index, 'day'));
   }, [timelineWeek]);
 
@@ -398,6 +399,29 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     const firstSessionMap = new Map<string, number>();
 
     filteredSessions.forEach((item) => {
+      const start = dayjs(item.session_date);
+      if (!isSessionStartInRange(item, rangeStart, rangeEnd)) return;
+
+      const name = item.influencer_name || '未填写达人';
+      const time = start.valueOf();
+      const current = firstSessionMap.get(name);
+      if (current === undefined || time < current) {
+        firstSessionMap.set(name, time);
+      }
+    });
+
+    return Array.from(firstSessionMap.entries())
+      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+      .map(([name]) => name);
+  }, [filteredSessions, timelineDays]);
+
+  const postDataInfluencers = useMemo(() => {
+    const rangeStart = timelineDays[0].startOf('day');
+    const rangeEnd = timelineDays[timelineDays.length - 1].endOf('day');
+    const firstSessionMap = new Map<string, number>();
+
+    filteredSessions.forEach((item) => {
+      if (!isLiveSession(item)) return;
       const start = dayjs(item.session_date);
       if (!isSessionStartInRange(item, rangeStart, rangeEnd)) return;
 
@@ -439,6 +463,10 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       const influencerName = item.influencer_name || '未填写达人';
       return influencerName === name && isSessionStartInRange(item, weekStart, weekEnd);
     });
+  };
+
+  const getPostDataSessionsForInfluencer = (name: string) => {
+    return getSessionsForInfluencer(name).filter(isLiveSession);
   };
 
   const getMerchantCargoSheet = (merchantId?: number | string, merchantName?: string) => {
@@ -509,13 +537,15 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return merchant?.commission_rate || 0;
   };
 
-  const getSessionCommissionLine = (item: any) => {
-    const brandCommission = formatCommissionRate(getSessionBrandCommissionRate(item));
-    const influencerCommission = formatCommissionRate(getSessionInfluencerCommissionRate(item));
-    return [
-      `品牌佣金 ${brandCommission || '-'}`,
-      `达人佣金 ${influencerCommission || '-'}`,
-    ];
+  const getEstimatedSessionProfit = (item: any) => {
+    const expectedGmv = Number(item.expected_gmv || 0);
+    const brandRate = normalizeCommissionRateForDisplay(getSessionBrandCommissionRate(item));
+    const influencerRate = normalizeCommissionRateForDisplay(getSessionInfluencerCommissionRate(item));
+
+    if (expectedGmv <= 0 || brandRate <= 0 || influencerRate <= 0) return null;
+
+    const travelCostShare = Number(item.travel_cost_share || 0);
+    return expectedGmv * ((brandRate - influencerRate) / 100) + travelCostShare;
   };
 
   const scrollTimelineToDate = (date: Dayjs) => {
@@ -541,7 +571,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const jumpTimelineToToday = () => {
     const today = dayjs();
     setSelectedDate(today);
-    setTimelineWeek(today.startOf('month'));
+    setTimelineWeek(today.startOf('day'));
     scrollTimelineToDate(today);
   };
 
@@ -610,12 +640,6 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     }
   };
 
-  const handlePostDataCalendarSelect = (date: Dayjs) => {
-    const daySessions = getSessionsForDay(date);
-    if (!daySessions.length) return;
-    setSelectedDate(date);
-  };
-
   const handleSubmit = async () => {
     try {
       const values = await form.validateFields();
@@ -654,7 +678,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
             items.push(`达人 ${payload.influencer_name || '未填写达人'} 已在 ${formatSessionDate(item.session_date)} 安排直播`);
           }
           if (payload.owner && item.owner === payload.owner) {
-            items.push(`负责人 ${payload.owner} 已在 ${formatSessionDate(item.session_date)} 负责另一场直播`);
+            items.push(`中控 ${payload.owner} 已在 ${formatSessionDate(item.session_date)} 负责另一场直播`);
           }
           return items;
         });
@@ -729,6 +753,11 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
   const getInlineSessionKey = (record: any) => String(record.id || `${record.session_date}-${record.influencer_name}-${record.merchant_name}`);
 
+  const selectedPostDataSession = useMemo(() => {
+    if (!selectedPostDataSessionKey) return null;
+    return filteredSessions.find((item) => getInlineSessionKey(item) === selectedPostDataSessionKey) || null;
+  }, [filteredSessions, selectedPostDataSessionKey]);
+
   const startInlineEdit = (record: any, field: InlineScheduleField) => {
     setInlineEditing({ sessionKey: getInlineSessionKey(record), field });
     setInlineValue(record[field] || '');
@@ -756,6 +785,133 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     }
   };
 
+  const startInlineMetricEdit = (record: any, field: InlineScheduleField, value: number) => {
+    setInlineEditing({ sessionKey: getInlineSessionKey(record), field });
+    setInlineValue(value ? String(value) : '');
+  };
+
+  const saveInlineMetricEdit = async (record: any, field: InlineScheduleField, nextValue = inlineValue, isCommission = false) => {
+    const numericValue = Number(nextValue || 0);
+    const payload = {
+      ...record,
+      [field]: isCommission ? normalizeCommissionRateForStorage(numericValue) : numericValue,
+    };
+
+    setInlineEditing(null);
+    setInlineValue('');
+
+    try {
+      if (record.id && !String(record.id).startsWith('local-') && !String(record.id).startsWith('demo-')) {
+        await liveSessionApi.update(record.id, payload);
+      }
+      setSessions((prev) => prev.map((item) => getInlineSessionKey(item) === getInlineSessionKey(record) ? payload : item));
+      message.success('排期信息已更新');
+    } catch (error) {
+      console.error('更新排期信息失败:', error);
+      message.error('更新失败');
+    }
+  };
+
+  const renderInlineMetricField = (
+    record: any,
+    field: InlineScheduleField,
+    label: string,
+    displayValue: number,
+    options: { isCommission?: boolean } = {},
+  ) => {
+    const sessionKey = getInlineSessionKey(record);
+    const isEditing = inlineEditing?.sessionKey === sessionKey && inlineEditing.field === field;
+    const normalizedDisplayValue = Number(displayValue || 0);
+    const formattedValue = options.isCommission
+      ? (normalizedDisplayValue > 0 ? `${normalizedDisplayValue}%` : '-')
+      : (normalizedDisplayValue > 0 ? formatMoney(normalizedDisplayValue) : '-');
+
+    if (isEditing) {
+      return (
+        <span className="schedule-session-inline-editor" onClick={(event) => event.stopPropagation()}>
+          <span>{label}</span>
+          <InputNumber<number>
+            autoFocus
+            size="small"
+            min={0}
+            precision={2}
+            value={inlineValue === '' ? null : Number(inlineValue)}
+            prefix={options.isCommission ? undefined : 'SGD'}
+            addonAfter={options.isCommission ? '%' : undefined}
+            onChange={(value) => setInlineValue(value === null ? '' : String(value))}
+            onBlur={() => saveInlineMetricEdit(record, field, inlineValue, Boolean(options.isCommission))}
+            onPressEnter={() => saveInlineMetricEdit(record, field, inlineValue, Boolean(options.isCommission))}
+          />
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className="schedule-session-editable-field schedule-session-metric-field"
+        role="button"
+        tabIndex={0}
+        onClick={(event) => {
+          event.stopPropagation();
+          startInlineMetricEdit(record, field, normalizedDisplayValue);
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Enter' || event.key === ' ') {
+            startInlineMetricEdit(record, field, normalizedDisplayValue);
+          }
+        }}
+      >
+        {label} {formattedValue}
+      </span>
+    );
+  };
+
+  const renderPostDataMetricField = (record: any, field: InlineScheduleField, label: string) => {
+    const sessionKey = getInlineSessionKey(record);
+    const isEditing = inlineEditing?.sessionKey === sessionKey && inlineEditing.field === field;
+    const numericValue = Number(record[field] || 0);
+
+    if (isEditing) {
+      return (
+        <span className="post-data-inline-editor" onClick={(event) => event.stopPropagation()}>
+          <span>{label}</span>
+          <InputNumber<number>
+            autoFocus
+            size="small"
+            min={0}
+            precision={2}
+            value={inlineValue === '' ? null : Number(inlineValue)}
+            prefix="SGD"
+            onChange={(value) => setInlineValue(value === null ? '' : String(value))}
+            onBlur={() => saveInlineMetricEdit(record, field)}
+            onPressEnter={() => saveInlineMetricEdit(record, field)}
+          />
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className="post-data-editable-metric"
+        role="button"
+        tabIndex={0}
+        onClick={(event) => {
+          event.stopPropagation();
+          startInlineMetricEdit(record, field, numericValue);
+        }}
+        onKeyDown={(event) => {
+          event.stopPropagation();
+          if (event.key === 'Enter' || event.key === ' ') {
+            startInlineMetricEdit(record, field, numericValue);
+          }
+        }}
+      >
+        {label} <strong>{formatMoney(numericValue)}</strong>
+      </span>
+    );
+  };
+
   const renderInlineScheduleField = (record: any, field: InlineScheduleField, label: string) => {
     const sessionKey = getInlineSessionKey(record);
     const isEditing = inlineEditing?.sessionKey === sessionKey && inlineEditing.field === field;
@@ -772,7 +928,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
             showSearch
             size="small"
             value={inlineValue || undefined}
-            placeholder="选择负责人"
+            placeholder="选择中控"
             optionFilterProp="children"
             onChange={(value) => saveInlineEdit(record, field, value || '')}
             onBlur={() => {
@@ -977,7 +1133,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           estimated_ad_cost: parseImportNumber(row['预计投放费用']),
           duration_hours: parseImportNumber(row['直播时长'], 4),
           cargo_sheet: String(row['货盘表'] || '').trim() || selectedMerchant?.cargo_sheet_url || undefined,
-          owner: String(row['负责人'] || '').trim() || undefined,
+          owner: String(row['中控'] || row['负责人'] || '').trim() || undefined,
           assistant: String(row['助播'] || '').trim() || undefined,
           live_city: String(row['直播城市'] || '').trim() || undefined,
           live_venue: String(row['直播场地'] || '').trim() || undefined,
@@ -1199,21 +1355,6 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     );
   };
 
-  const postDataCellRender = (value: Dayjs) => {
-    const daySessions = getSessionsForDay(value);
-    if (!daySessions.length) {
-      return <div className="post-data-cell post-data-empty" />;
-    }
-
-    return (
-      <div className="post-data-cell post-data-filled">
-        <span className="post-data-label">当日GMV</span>
-        <strong>{formatMoney(getActualGmvTotal(daySessions))}</strong>
-        <span className="post-data-count">{daySessions.length} 场</span>
-      </div>
-    );
-  };
-
   const operationColumn = {
     title: '操作',
     key: 'action',
@@ -1284,7 +1425,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       render: (platform: string) => <Tag color={platform === 'TikTok' ? 'red' : 'orange'}>{platform}</Tag>,
     },
     {
-      title: '负责人',
+      title: '中控',
       dataIndex: 'owner',
       key: 'owner',
       width: 120,
@@ -1468,92 +1609,6 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     },
   ];
 
-  const postDataColumns = [
-    {
-      title: '开播时间',
-      dataIndex: 'session_date',
-      key: 'session_date',
-      width: 150,
-      render: (value: string) => formatSessionDate(value),
-      sorter: (a: any, b: any) => dayjs(a.session_date).valueOf() - dayjs(b.session_date).valueOf(),
-    },
-    {
-      title: '达人',
-      dataIndex: 'influencer_name',
-      key: 'influencer_name',
-      width: 140,
-      render: (value: string) => value || '未填写',
-    },
-    {
-      title: '品牌',
-      dataIndex: 'merchant_name',
-      key: 'merchant_name',
-      width: 160,
-      render: (value: string) => formatBrandName(value),
-    },
-    {
-      title: '本场GMV',
-      dataIndex: 'actual_gmv_sgd',
-      key: 'actual_gmv_sgd',
-      width: 130,
-      render: (value: number) => formatMoney(value),
-      sorter: (a: any, b: any) => Number(a.actual_gmv_sgd || 0) - Number(b.actual_gmv_sgd || 0),
-    },
-    {
-      title: '实际投流数据',
-      dataIndex: 'actual_traffic_usd',
-      key: 'actual_traffic_usd',
-      width: 140,
-      render: (value: number) => `USD ${Number(value || 0).toLocaleString()}`,
-    },
-    {
-      title: '大屏投流数据',
-      dataIndex: 'screen_traffic_sgd',
-      key: 'screen_traffic_sgd',
-      width: 140,
-      render: (value: number) => formatMoney(value),
-    },
-    {
-      title: '投流方',
-      dataIndex: 'actual_traffic_provider',
-      key: 'actual_traffic_provider',
-      width: 120,
-      render: (value: string) => value || '未填写',
-    },
-    {
-      title: '应收费用',
-      dataIndex: 'traffic_receivable_type',
-      key: 'traffic_receivable_type',
-      width: 120,
-      render: (value: string) => value || '未填写',
-    },
-    {
-      title: '应收金额',
-      dataIndex: 'traffic_receivable_amount',
-      key: 'traffic_receivable_amount',
-      width: 130,
-      render: (value: number) => `USD ${Number(value || 0).toLocaleString()}`,
-    },
-    {
-      title: '投放备注',
-      dataIndex: 'traffic_notes',
-      key: 'traffic_notes',
-      width: 180,
-      render: (value: string) => value || '-',
-    },
-    {
-      title: '操作',
-      key: 'action',
-      fixed: 'right' as const,
-      width: 100,
-      render: (_: any, record: any) => (
-        <Button type="link" icon={<EditOutlined />} onClick={() => openEditModal(record, true)}>
-          修改
-        </Button>
-      ),
-    },
-  ];
-
   const historyColumns = [
     {
       title: '排期时间',
@@ -1609,7 +1664,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       sorter: (a: any, b: any) => Number(a.actual_gmv_sgd || 0) - Number(b.actual_gmv_sgd || 0),
     },
     {
-      title: '负责人',
+      title: '中控',
       dataIndex: 'owner',
       key: 'owner',
       width: 120,
@@ -1628,13 +1683,98 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     operationColumn,
   ];
 
+  const postDataDetailColumns = [
+    {
+      title: '开播时间',
+      dataIndex: 'session_date',
+      key: 'session_date',
+      width: 150,
+      render: (value: string) => formatSessionDate(value),
+      sorter: (a: any, b: any) => dayjs(a.session_date).valueOf() - dayjs(b.session_date).valueOf(),
+    },
+    {
+      title: '直播城市',
+      dataIndex: 'live_city',
+      key: 'live_city',
+      width: 120,
+      render: (value: string) => value || '未填写',
+    },
+    {
+      title: '达人',
+      dataIndex: 'influencer_name',
+      key: 'influencer_name',
+      width: 140,
+      render: (value: string) => value || '未填写',
+    },
+    {
+      title: '品牌',
+      dataIndex: 'merchant_name',
+      key: 'merchant_name',
+      width: 170,
+      render: (value: string) => formatBrandName(value),
+    },
+    {
+      title: '货盘表',
+      dataIndex: 'cargo_sheet',
+      key: 'cargo_sheet',
+      width: 140,
+      render: (value: string, record: any) => renderCargoSheet(value || getMerchantCargoSheet(record.merchant_id, record.merchant_name)),
+    },
+    {
+      title: '中控',
+      dataIndex: 'owner',
+      key: 'owner',
+      width: 120,
+      render: (value: string) => value || '未填写',
+    },
+    {
+      title: '实际投流数据',
+      dataIndex: 'actual_traffic_usd',
+      key: 'actual_traffic_usd',
+      width: 150,
+      render: (value: number) => `USD ${Number(value || 0).toLocaleString()}`,
+    },
+    {
+      title: '备注',
+      dataIndex: 'notes',
+      key: 'notes',
+      width: 180,
+      render: (value: string) => value || '无',
+    },
+  ];
+
+  const renderPostDataExpandedDetails = (record: any) => (
+    <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} className="session-detail-panel">
+      <Descriptions.Item label="目标GMV">{formatMoney(record.expected_gmv)}</Descriptions.Item>
+      <Descriptions.Item label="本场GMV">{formatMoney(record.actual_gmv_sgd)}</Descriptions.Item>
+      <Descriptions.Item label="实收GMV">{formatMoney(record.actual_received_gmv_sgd)}</Descriptions.Item>
+      <Descriptions.Item label="达人佣金">{formatCommissionRate(getSessionInfluencerCommissionRate(record)) || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="品牌佣金">{formatCommissionRate(getSessionBrandCommissionRate(record)) || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="助播">{record.assistant || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="直播场地">{record.live_venue || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="直播网络">{record.live_network || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="样品">{record.samples || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="投流规划">{trafficPlanText[record.traffic_plan] || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="预计投放费用">{formatMoney(record.estimated_ad_cost)}</Descriptions.Item>
+      <Descriptions.Item label="单场机酒分摊">{formatMoney(record.travel_cost_share)}</Descriptions.Item>
+      <Descriptions.Item label="应收品牌机酒费用">{formatMoney(record.brand_receivable)}</Descriptions.Item>
+      <Descriptions.Item label="大屏截图">{record.big_screen_screenshot || '未上传'}</Descriptions.Item>
+      <Descriptions.Item label="大屏上投流数据">{formatMoney(record.screen_traffic_sgd)}</Descriptions.Item>
+      <Descriptions.Item label="投流方">{record.actual_traffic_provider || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="应收费用">{record.traffic_receivable_type || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="应收金额">{`USD ${Number(record.traffic_receivable_amount || 0).toLocaleString()}`}</Descriptions.Item>
+      <Descriptions.Item label="投放备注" span={3}>{record.traffic_notes || '无'}</Descriptions.Item>
+      <Descriptions.Item label="行程备注" span={3}>{record.influencer_travel_note || '无'}</Descriptions.Item>
+    </Descriptions>
+  );
+
   const renderSessionDetails = (record: any) => (
     <Descriptions size="small" column={{ xs: 1, sm: 2, lg: 3 }} className="session-detail-panel">
       <Descriptions.Item label="货盘表">{renderCargoSheet(record.cargo_sheet || getMerchantCargoSheet(record.merchant_id, record.merchant_name))}</Descriptions.Item>
       <Descriptions.Item label="目标GMV">{formatMoney(record.expected_gmv)}</Descriptions.Item>
       <Descriptions.Item label="达人佣金">{formatCommissionRate(getSessionInfluencerCommissionRate(record)) || '未填写'}</Descriptions.Item>
       <Descriptions.Item label="品牌佣金">{formatCommissionRate(getSessionBrandCommissionRate(record)) || '未填写'}</Descriptions.Item>
-      <Descriptions.Item label="负责人">{record.owner || '未填写'}</Descriptions.Item>
+      <Descriptions.Item label="中控">{record.owner || '未填写'}</Descriptions.Item>
       <Descriptions.Item label="助播">{record.assistant || '未填写'}</Descriptions.Item>
       <Descriptions.Item label="直播城市">{record.live_city || '未填写'}</Descriptions.Item>
       <Descriptions.Item label="直播场地">{record.live_venue || '未填写'}</Descriptions.Item>
@@ -1654,6 +1794,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           <Descriptions.Item label="投流方">{record.actual_traffic_provider || '未填写'}</Descriptions.Item>
           <Descriptions.Item label="应收费用">{record.traffic_receivable_type || '未填写'}</Descriptions.Item>
           <Descriptions.Item label="应收金额">{`USD ${Number(record.traffic_receivable_amount || 0).toLocaleString()}`}</Descriptions.Item>
+          <Descriptions.Item label="实收GMV">{formatMoney(record.actual_received_gmv_sgd)}</Descriptions.Item>
           <Descriptions.Item label="投放备注">{record.traffic_notes || '无'}</Descriptions.Item>
         </>
       )}
@@ -1763,7 +1904,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       <Select
         allowClear
         showSearch
-        placeholder="按负责人筛选"
+        placeholder="按中控筛选"
         value={controlOwnerFilter}
         style={{ width: 180 }}
         optionFilterProp="children"
@@ -1789,37 +1930,155 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   );
 
   const renderPostDataView = () => (
-    <>
-      <Calendar
-        value={selectedDate}
-        onSelect={handlePostDataCalendarSelect}
-        onPanelChange={(date) => setSelectedDate(date)}
-        headerRender={renderCalendarHeader}
-        cellRender={(current, info) => (info.type === 'date' ? postDataCellRender(current) : info.originNode)}
-      />
+    <div>
+      <Space style={{ marginBottom: 16 }}>
+        <DatePicker
+          picker="month"
+          value={timelineWeek}
+          onChange={(value) => value && setTimelineWeek(value.startOf('month'))}
+        />
+        <Button onClick={() => setTimelineWeek(timelineWeek.subtract(1, 'month'))}>上月</Button>
+        <Button onClick={jumpTimelineToCurrentMonth}>本月</Button>
+        <Button onClick={() => setTimelineWeek(timelineWeek.add(1, 'month'))}>下月</Button>
+        <Button onClick={jumpTimelineToToday}>回到今天</Button>
+      </Space>
 
-      {selectedDateSessions.length ? (
-        <>
-          <h3 style={{ margin: '20px 0 12px' }}>
-            {selectedDate.format('YYYY年MM月DD日')} 播后数据
-            <span style={{ marginLeft: 12, color: 'rgba(0, 0, 0, 0.45)', fontSize: 14 }}>
-              合计 {formatMoney(getActualGmvTotal(selectedDateSessions))}
-            </span>
+      <div
+        className="post-data-grid"
+        style={{ gridTemplateColumns: `160px repeat(${timelineDays.length}, minmax(240px, 1fr))` }}
+      >
+        <div className="schedule-header schedule-name-cell">达人</div>
+        {timelineDays.map((day) => (
+          <div key={day.format('YYYY-MM-DD')} className="schedule-header">
+            <div>{day.format('MM/DD')}</div>
+            <span>{day.format('ddd')}</span>
+          </div>
+        ))}
+
+        <div className="schedule-name-cell schedule-total-name">当日GMV合计</div>
+        {timelineDays.map((day) => {
+          const daySessions = getSessionsForDay(day);
+          return (
+            <div key={`post-total-${day.format('YYYY-MM-DD')}`} className="schedule-total-cell post-data-total-cell">
+              <strong>{formatMoney(getActualGmvTotal(daySessions))}</strong>
+              <span>{daySessions.length} 场</span>
+            </div>
+          );
+        })}
+
+        {postDataInfluencers.map((name) => (
+          <React.Fragment key={`post-${name}`}>
+            <div className="schedule-name-cell schedule-row-name">
+              <span className="schedule-dot" style={{ background: getInfluencerColor(name) }} />
+              {name}
+            </div>
+            {timelineDays.map((day) => {
+              const dayItems = getPostDataSessionsForInfluencer(name).filter((item) => isSessionOnDay(item, day));
+              const daytimeItems = dayItems.filter((item) => !isEveningSession(item));
+              const eveningItems = dayItems.filter((item) => isEveningSession(item));
+              const hasBothSessionPeriods = daytimeItems.length > 0 && eveningItems.length > 0;
+              const renderPostDataCard = (item: any) => (
+                <div
+                  key={item.id || `${item.session_date}-${item.merchant_name}`}
+                  className={`post-data-session-card ${selectedPostDataSessionKey === getInlineSessionKey(item) ? 'post-data-session-card-selected' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  title="双击打开播后数据登记"
+                  onClickCapture={() => {
+                    setSelectedDate(day);
+                    setSelectedPostDataSessionKey(getInlineSessionKey(item));
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setSelectedDate(day);
+                    setSelectedPostDataSessionKey(getInlineSessionKey(item));
+                  }}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    openEditModal(item, true);
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      setSelectedDate(day);
+                      setSelectedPostDataSessionKey(getInlineSessionKey(item));
+                    }
+                  }}
+                >
+                  <div className="post-data-session-title">
+                    <strong>{formatBrandName(item.merchant_name)}</strong>
+                    <span>{formatTimelineSessionMeta(item) || '未填时间'}</span>
+                  </div>
+                  <div className="post-data-metrics">
+                    {renderPostDataMetricField(item, 'actual_gmv_sgd', '本场GMV')}
+                    {renderPostDataMetricField(item, 'actual_received_gmv_sgd', '实收GMV')}
+                    <span>目标GMV <strong>{formatMoney(item.expected_gmv)}</strong></span>
+                    <span>
+                      目标达成率
+                      <strong>
+                        {Number(item.expected_gmv || 0) > 0
+                          ? `${((Number(item.actual_gmv_sgd || 0) / Number(item.expected_gmv || 0)) * 100).toFixed(2)}%`
+                          : '-'}
+                      </strong>
+                    </span>
+                  </div>
+                </div>
+              );
+              return (
+                <div
+                  key={`post-${name}-${day.format('YYYY-MM-DD')}`}
+                  className={`post-data-grid-cell ${dayItems.length ? 'post-data-grid-cell-filled' : ''}`}
+                  onClick={() => {
+                    setSelectedDate(day);
+                    setSelectedPostDataSessionKey(null);
+                  }}
+                >
+                  {dayItems.length ? (
+                    <div className={`schedule-period-slots post-data-period-slots ${hasBothSessionPeriods ? 'schedule-period-slots-split' : 'schedule-period-slots-single'}`}>
+                      {hasBothSessionPeriods ? (
+                        <>
+                          <div className="schedule-period-slot schedule-period-slot-daytime schedule-period-slot-filled">
+                            {daytimeItems.map(renderPostDataCard)}
+                          </div>
+                          <div className="schedule-period-slot schedule-period-slot-evening schedule-period-slot-filled">
+                            {eveningItems.map(renderPostDataCard)}
+                          </div>
+                        </>
+                      ) : (
+                        <div className={`schedule-period-slot ${eveningItems.length ? 'schedule-period-slot-evening-only' : 'schedule-period-slot-daytime-only'} schedule-period-slot-filled`}>
+                          {(daytimeItems.length ? daytimeItems : eveningItems).map(renderPostDataCard)}
+                        </div>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </React.Fragment>
+        ))}
+      </div>
+
+      {!postDataInfluencers.length ? (
+        <div className="post-data-empty-tip">当前筛选范围内没有可登记播后数据的直播场次</div>
+      ) : null}
+
+      {(selectedPostDataSession || selectedDateSessions.length) ? (
+        <div className="post-data-detail-section">
+          <h3>
+            {selectedDate.format('YYYY年MM月DD日')} 场次
           </h3>
           <Table
-            columns={postDataColumns}
-            dataSource={selectedDateSessions}
+            columns={postDataDetailColumns}
+            dataSource={selectedPostDataSession ? [selectedPostDataSession] : selectedDateSessions}
             rowKey={(record) => record.id || `${record.session_date}-${record.influencer_name}`}
             loading={loading}
             pagination={false}
-            expandable={{ expandedRowRender: renderSessionDetails }}
-            scroll={{ x: 1320 }}
+            expandable={{ expandedRowRender: renderPostDataExpandedDetails }}
+            scroll={{ x: 1170 }}
           />
-        </>
-      ) : (
-        <div className="post-data-empty-tip">请选择有直播场次的日期查看播后数据</div>
-      )}
-    </>
+        </div>
+      ) : null}
+    </div>
   );
 
   const renderHistoryView = () => (
@@ -1854,7 +2113,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       <div
         ref={scheduleRef}
         className="influencer-schedule"
-        style={{ gridTemplateColumns: `150px repeat(${timelineDays.length}, minmax(130px, 1fr))` }}
+        style={{ gridTemplateColumns: `150px repeat(${timelineDays.length}, minmax(${communicationOnly ? 220 : 150}px, 1fr))` }}
       >
         <div className="schedule-header schedule-name-cell">达人</div>
         {timelineDays.map((day) => (
@@ -1881,15 +2140,62 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
               const dayItems = getSessionsForInfluencer(name).filter((item) => {
                 return isSessionOnDay(item, day);
               });
-              const travelNotes = dayItems.filter((item) => item.influencer_travel_note);
+              const standaloneTravelNotes = dayItems.filter((item) => isTravelNoteOnly(item) && item.influencer_travel_note);
+              const sessionTravelNotes = dayItems.filter((item) => !isTravelNoteOnly(item) && item.influencer_travel_note);
               const daySessions = dayItems.filter((item) => !isTravelNoteOnly(item));
               const daytimeSessions = daySessions.filter((item) => !isEveningSession(item));
               const eveningSessions = daySessions.filter((item) => isEveningSession(item));
+              const hasBothSessionPeriods = daytimeSessions.length > 0 && eveningSessions.length > 0;
+              const renderTravelNoteBlock = (item: any) => (
+                <div
+                  key={`travel-${item.id || `${item.session_date}-${item.influencer_name}`}`}
+                  className="schedule-travel-note"
+                  role="button"
+                  tabIndex={0}
+                  title="双击修改行程备注"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                  }}
+                  onDoubleClick={(event) => {
+                    event.stopPropagation();
+                    openEditModal(item);
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      openEditModal(item);
+                    }
+                  }}
+                >
+                  <span>{item.influencer_travel_note}</span>
+                  <Popconfirm
+                    title="删除行程备注"
+                    description="确定删除这条备注吗？"
+                    okText="删除"
+                    cancelText="取消"
+                    onConfirm={(event) => {
+                      event?.stopPropagation();
+                      handleDeleteTravelNote(item);
+                    }}
+                    onCancel={(event) => event?.stopPropagation()}
+                  >
+                    <button
+                      type="button"
+                      className="schedule-travel-note-delete"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      ×
+                    </button>
+                  </Popconfirm>
+                </div>
+              );
               const renderSessionBlock = (item: any) => {
                 const color = getInfluencerColor(name);
                 const merchantIntroId = getSessionMerchantIntroId(item);
                 const brandName = formatBrandName(item.merchant_name);
                 const cooperationMode = getSessionBrandCooperationMode(item);
+                const estimatedProfit = getEstimatedSessionProfit(item);
                 return (
                   <div
                     key={item.id || `${item.session_date}-${item.merchant_name}`}
@@ -1897,9 +2203,14 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                     tabIndex={0}
                     className="schedule-session-block"
                     style={{ borderColor: color, background: `${color}18`, color }}
+                    title="双击修改排期"
                     onClick={(event) => {
                       event.stopPropagation();
                       setSelectedDate(day);
+                    }}
+                    onDoubleClick={(event) => {
+                      event.stopPropagation();
+                      openEditModal(item);
                     }}
                     onKeyDown={(event) => {
                       event.stopPropagation();
@@ -1939,39 +2250,32 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                     </span>
                     {formatTimelineSessionMeta(item) ? <span>{formatTimelineSessionMeta(item)}</span> : null}
                     {communicationOnly ? (
-                      <span className="schedule-session-mode">
-                        {getSessionBrandCategory(item)}
-                      </span>
+                      <>
+                        <span className="schedule-session-mode">
+                          {getSessionBrandCategory(item)}
+                        </span>
+                        {renderInlineMetricField(item, 'expected_gmv', '目标GMV', Number(item.expected_gmv || 0))}
+                        {renderInlineMetricField(item, 'travel_cost_share', '机酒均摊', Number(item.travel_cost_share || 0))}
+                      </>
                     ) : (
                       <>
                         {renderInlineScheduleField(item, 'live_venue', '场地')}
-                        {renderInlineScheduleField(item, 'owner', '负责人')}
+                        {renderInlineScheduleField(item, 'owner', '中控')}
                         {renderInlineScheduleField(item, 'assistant', '助播')}
                       </>
                     )}
-                    <span className="schedule-session-commission">
-                      {getSessionCommissionLine(item).map((line) => (
-                        <span key={line}>{line}</span>
-                      ))}
-                    </span>
-                    <div className="schedule-session-actions">
-                      <span
-                        className="schedule-session-action"
-                        role="button"
-                        tabIndex={0}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          openEditModal(item);
-                        }}
-                        onKeyDown={(event) => {
-                          event.stopPropagation();
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            openEditModal(item);
-                          }
-                        }}
-                      >
-                        修改
+                    {communicationOnly ? (
+                      <span className="schedule-session-commission">
+                        {renderInlineMetricField(item, 'brand_commission_rate', '品牌佣金', normalizeCommissionRateForDisplay(getSessionBrandCommissionRate(item)), { isCommission: true })}
+                        {renderInlineMetricField(item, 'influencer_commission_rate', '达人佣金', normalizeCommissionRateForDisplay(getSessionInfluencerCommissionRate(item)), { isCommission: true })}
                       </span>
+                    ) : null}
+                    {communicationOnly && estimatedProfit !== null ? (
+                      <span className="schedule-session-estimated-profit">
+                        预估单场利润 {formatMoney(estimatedProfit)}
+                      </span>
+                    ) : null}
+                    <div className="schedule-session-actions">
                       <Popconfirm
                         title="删除场次"
                         description="确定删除这场直播排期吗？"
@@ -2008,55 +2312,34 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                   }}
                   title="双击新增排期"
                 >
-                  {travelNotes.map((item) => (
-                    <div
-                      key={`travel-${item.id || `${item.session_date}-${item.influencer_name}`}`}
-                      className="schedule-travel-note"
-                      role="button"
-                      tabIndex={0}
-                      title="单击修改行程备注"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        openEditModal(item);
-                      }}
-                      onKeyDown={(event) => {
-                        event.stopPropagation();
-                        if (event.key === 'Enter' || event.key === ' ') {
-                          event.preventDefault();
-                          openEditModal(item);
-                        }
-                      }}
-                    >
-                      <span>{item.influencer_travel_note}</span>
-                      <Popconfirm
-                        title="删除行程备注"
-                        description="确定删除这条备注吗？"
-                        okText="删除"
-                        cancelText="取消"
-                        onConfirm={(event) => {
-                          event?.stopPropagation();
-                          handleDeleteTravelNote(item);
-                        }}
-                        onCancel={(event) => event?.stopPropagation()}
-                      >
-                        <button
-                          type="button"
-                          className="schedule-travel-note-delete"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          ×
-                        </button>
-                      </Popconfirm>
+                  {standaloneTravelNotes.length ? (
+                    <div className="schedule-travel-note-area schedule-travel-note-area-top">
+                      {standaloneTravelNotes.map(renderTravelNoteBlock)}
                     </div>
-                  ))}
-                  <div className="schedule-period-slots">
-                    <div className={`schedule-period-slot ${daytimeSessions.length ? 'schedule-period-slot-filled' : 'schedule-period-slot-empty'}`}>
-                      {daytimeSessions.map(renderSessionBlock)}
+                  ) : null}
+                  {daySessions.length ? (
+                    <div className={`schedule-period-slots ${hasBothSessionPeriods ? 'schedule-period-slots-split' : 'schedule-period-slots-single'}`}>
+                      {hasBothSessionPeriods ? (
+                        <>
+                          <div className="schedule-period-slot schedule-period-slot-daytime schedule-period-slot-filled">
+                            {daytimeSessions.map(renderSessionBlock)}
+                          </div>
+                          <div className="schedule-period-slot schedule-period-slot-evening schedule-period-slot-filled">
+                            {eveningSessions.map(renderSessionBlock)}
+                          </div>
+                        </>
+                      ) : (
+                        <div className={`schedule-period-slot ${eveningSessions.length ? 'schedule-period-slot-evening-only' : 'schedule-period-slot-daytime-only'} schedule-period-slot-filled`}>
+                          {(daytimeSessions.length ? daytimeSessions : eveningSessions).map(renderSessionBlock)}
+                        </div>
+                      )}
                     </div>
-                    <div className={`schedule-period-slot ${eveningSessions.length ? 'schedule-period-slot-filled' : 'schedule-period-slot-empty'}`}>
-                      {eveningSessions.map(renderSessionBlock)}
+                  ) : null}
+                  {sessionTravelNotes.length ? (
+                    <div className="schedule-travel-note-area">
+                      {sessionTravelNotes.map(renderTravelNoteBlock)}
                     </div>
-                  </div>
+                  ) : null}
                 </div>
               );
             })}
@@ -2192,9 +2475,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         <Tabs
           items={[
             { key: 'timeline', label: '达人排期', children: renderTimelineView() },
+            { key: 'post-data', label: '播后数据登记', children: renderPostDataView() },
             { key: 'calendar', label: '月历', children: renderCalendarView() },
             { key: 'control-schedule', label: '中控排期', children: renderControlScheduleView() },
-            { key: 'post-data', label: '播后数据登记', children: renderPostDataView() },
             { key: 'history', label: '历史场次', children: renderHistoryView() },
           ]}
         />
@@ -2389,8 +2672,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item name="owner" label="负责人">
-                  <Select placeholder="请选择负责人" allowClear showSearch optionFilterProp="children">
+                <Form.Item name="owner" label="中控">
+                  <Select placeholder="请选择中控" allowClear showSearch optionFilterProp="children">
                     {employees.filter((item) => item.status === 'active').map((item) => <Option key={item.id} value={item.name}>{item.name} ({item.role})</Option>)}
                   </Select>
                 </Form.Item>
@@ -2497,6 +2780,11 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                           trafficReceivableEditedRef.current = true;
                         }}
                       />
+                    </Form.Item>
+                  </Col>
+                  <Col xs={24} md={12}>
+                    <Form.Item name="actual_received_gmv_sgd" label="实收GMV（新币）">
+                      <InputNumber<number> style={{ width: '100%' }} min={0} precision={2} prefix="SGD" onFocus={selectNumberOnFocus} />
                     </Form.Item>
                   </Col>
                   <Col span={24}><Form.Item name="traffic_notes" label="投放备注"><TextArea rows={2} placeholder="实际投放情况、差异或问题记录" /></Form.Item></Col>

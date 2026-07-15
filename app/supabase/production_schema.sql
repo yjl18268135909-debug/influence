@@ -9,6 +9,7 @@ drop table if exists public.travel_costs cascade;
 drop table if exists public.finance_records cascade;
 drop table if exists public.live_records cascade;
 drop table if exists public.profiles cascade;
+drop table if exists public.employee_management_data cascade;
 drop table if exists public.income cascade;
 drop table if exists public.costs cascade;
 drop table if exists public.expenses cascade;
@@ -111,6 +112,7 @@ create table public.live_sessions (
   execution_notes text,
   cost_notes text,
   actual_gmv_sgd double precision default 0,
+  actual_received_gmv_sgd double precision default 0,
   big_screen_screenshot text,
   actual_traffic_usd double precision default 0,
   screen_traffic_sgd double precision default 0,
@@ -235,6 +237,7 @@ alter table public.travel_payables add column if not exists payment_notes text;
 alter table public.travel_payables add column if not exists is_paid boolean default false;
 
 alter table public.live_sessions add column if not exists received_amount double precision default 0;
+alter table public.live_sessions add column if not exists actual_received_gmv_sgd double precision default 0;
 alter table public.live_sessions add column if not exists payment_notes text;
 alter table public.live_sessions add column if not exists is_bad_debt boolean default false;
 
@@ -246,6 +249,12 @@ create table if not exists public.app_accounts (
   role text not null,
   status text default 'active',
   created_at timestamptz default current_timestamp,
+  updated_at timestamptz default current_timestamp
+);
+
+create table if not exists public.employee_management_data (
+  id integer primary key check (id = 1),
+  data jsonb not null default '{}'::jsonb,
   updated_at timestamptz default current_timestamp
 );
 

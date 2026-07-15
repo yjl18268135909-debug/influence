@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import { Button, Card, Form, Input, Layout, Menu, Space, Typography, message, theme } from 'antd';
+import { Button, Card, Form, Input, Layout, Menu, Space, Spin, Typography, message, theme } from 'antd';
 import {
   UserOutlined,
   ShopOutlined,
@@ -14,21 +14,28 @@ import {
   ProjectOutlined,
   DashboardOutlined,
 } from '@ant-design/icons';
-import Influencers from './pages/Influencers';
-import Merchants from './pages/Merchants';
-import MerchantIntroduction from './pages/MerchantIntroduction';
-import LiveSessions from './pages/LiveSessions';
-import EmployeeManagement from './pages/EmployeeManagement';
-import FinanceManagement from './pages/FinanceManagement';
-import Settings from './pages/Settings';
-import WorkProgress from './pages/WorkProgress';
-import DataDashboard from './pages/DataDashboard';
 import { accountApi } from './api';
 
 const { Header, Content, Sider } = Layout;
 const { Title, Text } = Typography;
 
 const AUTH_STORAGE_KEY = 'shopfluence_current_user';
+
+const DataDashboard = lazy(() => import('./pages/DataDashboard'));
+const Influencers = lazy(() => import('./pages/Influencers'));
+const Merchants = lazy(() => import('./pages/Merchants'));
+const MerchantIntroduction = lazy(() => import('./pages/MerchantIntroduction'));
+const LiveSessions = lazy(() => import('./pages/LiveSessions'));
+const WorkProgress = lazy(() => import('./pages/WorkProgress'));
+const FinanceManagement = lazy(() => import('./pages/FinanceManagement'));
+const EmployeeManagement = lazy(() => import('./pages/EmployeeManagement'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+const PageFallback = () => (
+  <div style={{ minHeight: 280, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+    <Spin />
+  </div>
+);
 
 type CurrentUser = {
   username: string;
@@ -263,23 +270,25 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
               borderRadius: borderRadiusLG,
             }}
           >
-            <Routes>
-              <Route path="/" element={<Navigate to={defaultRoute} replace />} />
-              <Route path="/data-dashboard" element={<DataDashboard />} />
-              <Route path="/influencers" element={<Influencers />} />
-              <Route path="/merchants" element={<Merchants />} />
-              <Route path="/merchants/:id/introduction" element={<MerchantIntroduction />} />
-              <Route path="/live-sessions" element={<LiveSessions key="live-sessions" />} />
-              <Route path="/work-progress" element={<WorkProgress />} />
-              <Route path="/travel-costs" element={canViewFinance(currentUser) ? <FinanceManagement travelOnly /> : <Navigate to={defaultRoute} replace />} />
-              <Route path="/travel-receivables" element={canViewFinance(currentUser) ? <FinanceManagement receivablesOnly /> : <Navigate to={defaultRoute} replace />} />
-              <Route path="/travel-payables" element={canViewFinance(currentUser) ? <FinanceManagement payablesOnly /> : <Navigate to={defaultRoute} replace />} />
-              <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />
-              <Route path="/employees" element={<EmployeeManagement />} />
-              <Route path="/finance" element={canViewFinance(currentUser) ? <FinanceManagement /> : <Navigate to={defaultRoute} replace />} />
-              <Route path="/settings" element={canManageAccounts(currentUser) ? <Settings /> : <Navigate to={defaultRoute} replace />} />
-              <Route path="*" element={<Navigate to={defaultRoute} replace />} />
-            </Routes>
+            <Suspense fallback={<PageFallback />}>
+              <Routes>
+                <Route path="/" element={<Navigate to={defaultRoute} replace />} />
+                <Route path="/data-dashboard" element={<DataDashboard />} />
+                <Route path="/influencers" element={<Influencers />} />
+                <Route path="/merchants" element={<Merchants />} />
+                <Route path="/merchants/:id/introduction" element={<MerchantIntroduction />} />
+                <Route path="/live-sessions" element={<LiveSessions key="live-sessions" />} />
+                <Route path="/work-progress" element={<WorkProgress />} />
+                <Route path="/travel-costs" element={canViewFinance(currentUser) ? <FinanceManagement travelOnly /> : <Navigate to={defaultRoute} replace />} />
+                <Route path="/travel-receivables" element={canViewFinance(currentUser) ? <FinanceManagement receivablesOnly /> : <Navigate to={defaultRoute} replace />} />
+                <Route path="/travel-payables" element={canViewFinance(currentUser) ? <FinanceManagement payablesOnly /> : <Navigate to={defaultRoute} replace />} />
+                <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />
+                <Route path="/employees" element={<EmployeeManagement />} />
+                <Route path="/finance" element={canViewFinance(currentUser) ? <FinanceManagement /> : <Navigate to={defaultRoute} replace />} />
+                <Route path="/settings" element={canManageAccounts(currentUser) ? <Settings /> : <Navigate to={defaultRoute} replace />} />
+                <Route path="*" element={<Navigate to={defaultRoute} replace />} />
+              </Routes>
+            </Suspense>
           </div>
         </Content>
       </Layout>

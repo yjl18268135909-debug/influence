@@ -80,8 +80,53 @@ function normalizeRate(value) {
   return text.includes('%') || numericValue > 1 ? numericValue / 100 : numericValue;
 }
 
+function ensureEmployeeManagementDataTable() {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS employee_management_data (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      data TEXT NOT NULL DEFAULT '{}',
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+}
+
+function getEmployeeManagementData() {
+  ensureEmployeeManagementDataTable();
+  const row = db.prepare('SELECT data, updated_at FROM employee_management_data WHERE id = 1').get();
+  if (!row) return null;
+  try {
+    return {
+      ...JSON.parse(row.data || '{}'),
+      updated_at: row.updated_at,
+    };
+  } catch {
+    return { updated_at: row.updated_at };
+  }
+}
+
+function saveEmployeeManagementData(data = {}) {
+  ensureEmployeeManagementDataTable();
+  const payload = {
+    employees: Array.isArray(data.employees) ? data.employees : [],
+    leaves: Array.isArray(data.leaves) ? data.leaves : [],
+    leaveOverrides: data.leaveOverrides && typeof data.leaveOverrides === 'object' ? data.leaveOverrides : {},
+    performanceRecords: Array.isArray(data.performanceRecords) ? data.performanceRecords : [],
+    scores: Array.isArray(data.scores) ? data.scores : [],
+    attendanceRecords: Array.isArray(data.attendanceRecords) ? data.attendanceRecords : [],
+  };
+
+  db.prepare(`
+    INSERT INTO employee_management_data (id, data, updated_at)
+    VALUES (1, ?, CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET data = excluded.data, updated_at = CURRENT_TIMESTAMP
+  `).run(JSON.stringify(payload));
+
+  return getEmployeeManagementData();
+}
+
 function exportAllData() {
   ensureDashboardTargetsTable();
+  ensureEmployeeManagementDataTable();
   const tables = [
     'influencers',
     'merchants',
@@ -95,6 +140,7 @@ function exportAllData() {
     'travel_payables',
     'work_progress_items',
     'dashboard_targets',
+    'employee_management_data',
   ];
 
   const data = tables.reduce((result, table) => {
@@ -795,11 +841,11 @@ function createLiveSession(data) {
       travel_cost_share, brand_receivable, owner,
       assistant, live_city, live_venue, live_network, samples, schedule_type, influencer_travel_note, schedule_other_note,
       brand_category, brand_cooperation_mode, plan_notes, execution_notes, cost_notes,
-      actual_gmv_sgd, big_screen_screenshot, actual_traffic_usd, screen_traffic_sgd, actual_traffic_provider,
+      actual_gmv_sgd, actual_received_gmv_sgd, big_screen_screenshot, actual_traffic_usd, screen_traffic_sgd, actual_traffic_provider,
       traffic_receivable_type, traffic_receivable_amount, traffic_notes, post_live_notes,
       received_amount, payment_notes, is_bad_debt
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     influencerId,
@@ -835,6 +881,7 @@ function createLiveSession(data) {
     data.execution_notes || null,
     data.cost_notes || null,
     data.actual_gmv_sgd || 0,
+    data.actual_received_gmv_sgd || 0,
     data.big_screen_screenshot || null,
     data.actual_traffic_usd || 0,
     data.screen_traffic_sgd || 0,
@@ -861,7 +908,7 @@ function updateLiveSession(id, data) {
         travel_cost_share = ?, brand_receivable = ?, owner = ?, assistant = ?, live_city = ?,
         live_venue = ?, live_network = ?, samples = ?, schedule_type = ?, influencer_travel_note = ?, schedule_other_note = ?,
         brand_category = ?, brand_cooperation_mode = ?, plan_notes = ?, execution_notes = ?, cost_notes = ?,
-        actual_gmv_sgd = ?, big_screen_screenshot = ?, actual_traffic_usd = ?, screen_traffic_sgd = ?,
+        actual_gmv_sgd = ?, actual_received_gmv_sgd = ?, big_screen_screenshot = ?, actual_traffic_usd = ?, screen_traffic_sgd = ?,
         actual_traffic_provider = ?, traffic_receivable_type = ?, traffic_receivable_amount = ?, traffic_notes = ?,
         post_live_notes = ?, received_amount = ?, payment_notes = ?, is_bad_debt = ?
     WHERE id = ?
@@ -900,6 +947,7 @@ function updateLiveSession(id, data) {
     data.execution_notes || null,
     data.cost_notes || null,
     data.actual_gmv_sgd || 0,
+    data.actual_received_gmv_sgd || 0,
     data.big_screen_screenshot || null,
     data.actual_traffic_usd || 0,
     data.screen_traffic_sgd || 0,
@@ -1385,6 +1433,8 @@ module.exports = {
   updateAccount,
   deleteAccount,
   exportAllData,
+  getEmployeeManagementData,
+  saveEmployeeManagementData,
   getWorkProgressItems,
   createWorkProgressItem,
   updateWorkProgressItem,
