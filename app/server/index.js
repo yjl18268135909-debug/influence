@@ -65,7 +65,7 @@ const requireOwner = (req, res, next) => {
 };
 
 app.use(['/api/accounts', '/api/export'], requireOwner);
-app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports', '/api/travel-receivables', '/api/travel-payables'], requireFullAccess);
+app.use(['/api/expenses', '/api/costs', '/api/income', '/api/reports'], requireFullAccess);
 
 app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const username = String(req.body.username || '').trim();

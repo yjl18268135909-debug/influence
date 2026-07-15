@@ -47,23 +47,22 @@ type MenuItem = {
   key: string;
   icon: React.ReactNode;
   label: string;
-  financeOnly?: boolean;
-  ownerOnly?: boolean;
+  hiddenForOperator?: boolean;
 };
 
 const menuItems: MenuItem[] = [
   { key: '/data-dashboard', icon: <DashboardOutlined />, label: '数据看板' },
   { key: '/schedule-communication', icon: <MessageOutlined />, label: '达人排期沟通' },
   { key: '/live-sessions', icon: <CalendarOutlined />, label: '直播场次管理' },
-  { key: '/travel-costs', icon: <WalletOutlined />, label: '达人机酒管理', financeOnly: true },
-  { key: '/travel-receivables', icon: <WalletOutlined />, label: '应收款项', financeOnly: true },
-  { key: '/travel-payables', icon: <WalletOutlined />, label: '应付管理', financeOnly: true },
+  { key: '/travel-costs', icon: <WalletOutlined />, label: '达人机酒管理' },
+  { key: '/travel-receivables', icon: <WalletOutlined />, label: '应收款项' },
+  { key: '/travel-payables', icon: <WalletOutlined />, label: '应付管理' },
   { key: '/influencers', icon: <UserOutlined />, label: '达人管理' },
   { key: '/merchants', icon: <ShopOutlined />, label: '商家管理' },
   { key: '/employees', icon: <TeamOutlined />, label: '员工管理' },
   { key: '/work-progress', icon: <ProjectOutlined />, label: '工作推进' },
-  { key: '/finance', icon: <WalletOutlined />, label: '财务管理', financeOnly: true },
-  { key: '/settings', icon: <SettingOutlined />, label: '设置', ownerOnly: true },
+  { key: '/finance', icon: <WalletOutlined />, label: '财务管理', hiddenForOperator: true },
+  { key: '/settings', icon: <SettingOutlined />, label: '设置' },
 ];
 
 const readStorage = <T,>(key: string, fallback: T): T => {
@@ -77,10 +76,6 @@ const readStorage = <T,>(key: string, fallback: T): T => {
 
 const canViewFinance = (user: CurrentUser | null) => {
   return user ? ['老板', '财务'].includes(user.role) : false;
-};
-
-const canManageAccounts = (user: CurrentUser | null) => {
-  return user?.role === '老板';
 };
 
 const LoginScreen: React.FC<{ onLogin: (user: CurrentUser) => void }> = ({ onLogin }) => {
@@ -148,13 +143,11 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
   const navigate = useNavigate();
   const location = useLocation();
   const visibleMenuItems = menuItems.filter((item) => {
-    if (item.ownerOnly) return canManageAccounts(currentUser);
-    if (item.financeOnly) return canViewFinance(currentUser);
+    if (item.hiddenForOperator) return canViewFinance(currentUser);
     return true;
   });
   const defaultRoute = visibleMenuItems[0]?.key || '/schedule-communication';
-  const restrictedFinanceRoutes = ['/finance', '/travel-costs', '/travel-receivables', '/travel-payables'];
-  const ownerOnlyRoutes = ['/settings'];
+  const restrictedFinanceRoutes = ['/finance'];
 
   const {
     token: { colorBgContainer, borderRadiusLG },
@@ -162,11 +155,6 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
 
   useEffect(() => {
     if (!canViewFinance(currentUser) && restrictedFinanceRoutes.includes(location.pathname)) {
-      navigate(defaultRoute, { replace: true });
-      return;
-    }
-
-    if (!canManageAccounts(currentUser) && ownerOnlyRoutes.includes(location.pathname)) {
       navigate(defaultRoute, { replace: true });
       return;
     }
@@ -279,13 +267,13 @@ const AppContent: React.FC<{ currentUser: CurrentUser; onLogout: () => void }> =
                 <Route path="/merchants/:id/introduction" element={<MerchantIntroduction />} />
                 <Route path="/live-sessions" element={<LiveSessions key="live-sessions" />} />
                 <Route path="/work-progress" element={<WorkProgress />} />
-                <Route path="/travel-costs" element={canViewFinance(currentUser) ? <FinanceManagement travelOnly /> : <Navigate to={defaultRoute} replace />} />
-                <Route path="/travel-receivables" element={canViewFinance(currentUser) ? <FinanceManagement receivablesOnly /> : <Navigate to={defaultRoute} replace />} />
-                <Route path="/travel-payables" element={canViewFinance(currentUser) ? <FinanceManagement payablesOnly /> : <Navigate to={defaultRoute} replace />} />
+                <Route path="/travel-costs" element={<FinanceManagement travelOnly />} />
+                <Route path="/travel-receivables" element={<FinanceManagement receivablesOnly />} />
+                <Route path="/travel-payables" element={<FinanceManagement payablesOnly />} />
                 <Route path="/schedule-communication" element={<LiveSessions key="schedule-communication" communicationOnly />} />
                 <Route path="/employees" element={<EmployeeManagement />} />
                 <Route path="/finance" element={canViewFinance(currentUser) ? <FinanceManagement /> : <Navigate to={defaultRoute} replace />} />
-                <Route path="/settings" element={canManageAccounts(currentUser) ? <Settings /> : <Navigate to={defaultRoute} replace />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to={defaultRoute} replace />} />
               </Routes>
             </Suspense>
