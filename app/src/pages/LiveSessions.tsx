@@ -2049,9 +2049,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                     <span>{formatTimelineSessionMeta(item) || '未填时间'}</span>
                   </div>
                   <div className="post-data-metrics">
+                    <span>目标GMV <strong>{formatMoney(item.expected_gmv)}</strong></span>
                     {renderPostDataMetricField(item, 'actual_gmv_sgd', '本场GMV')}
                     {renderPostDataMetricField(item, 'actual_received_gmv_sgd', '实收GMV')}
-                    <span>目标GMV <strong>{formatMoney(item.expected_gmv)}</strong></span>
                     <span>
                       目标达成率
                       <strong>
