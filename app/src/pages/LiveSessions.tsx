@@ -250,6 +250,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const [merchants, setMerchants] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [sessionSaving, setSessionSaving] = useState(false);
+  const [batchSaving, setBatchSaving] = useState(false);
+  const [batchDeleting, setBatchDeleting] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [batchModalVisible, setBatchModalVisible] = useState(false);
   const [batchDeleteModalVisible, setBatchDeleteModalVisible] = useState(false);
@@ -270,6 +273,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const [brandSearchText, setBrandSearchText] = useState('');
   const calendarPanelChangingRef = useRef(false);
   const trafficReceivableEditedRef = useRef(false);
+  const sessionSavingRef = useRef(false);
+  const batchSavingRef = useRef(false);
+  const batchDeletingRef = useRef(false);
   const [form] = Form.useForm();
   const [batchForm] = Form.useForm();
   const [batchDeleteForm] = Form.useForm();
@@ -739,6 +745,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   };
 
   const handleSubmit = async () => {
+    if (sessionSavingRef.current) return;
+    sessionSavingRef.current = true;
+    setSessionSaving(true);
     try {
       const values = await form.validateFields();
       const screenshotFiles = values.big_screen_screenshot || [];
@@ -810,6 +819,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       if (error?.errorFields) return;
       console.error('操作失败:', error);
       message.error(error?.response?.data?.error || '保存失败，请检查必填信息');
+    } finally {
+      sessionSavingRef.current = false;
+      setSessionSaving(false);
     }
   };
 
@@ -1296,6 +1308,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   };
 
   const handleBatchSubmit = async () => {
+    if (batchSavingRef.current) return;
+    batchSavingRef.current = true;
+    setBatchSaving(true);
     try {
       const values = await batchForm.validateFields();
       const [startDate, endDate] = values.dateRange;
@@ -1323,10 +1338,16 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       console.error('批量新增排期失败:', error);
       const detail = (error as any)?.response?.data?.error;
       message.error(detail ? `批量新增失败：${detail}` : '批量新增失败，请检查日期周期');
+    } finally {
+      batchSavingRef.current = false;
+      setBatchSaving(false);
     }
   };
 
   const handleBatchDeleteSubmit = async () => {
+    if (batchDeletingRef.current) return;
+    batchDeletingRef.current = true;
+    setBatchDeleting(true);
     try {
       const values = await batchDeleteForm.validateFields();
       const [startDate, endDate] = values.dateRange;
@@ -1347,6 +1368,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     } catch (error) {
       console.error('批量删除排期失败:', error);
       message.error('批量删除失败，请检查日期周期');
+    } finally {
+      batchDeletingRef.current = false;
+      setBatchDeleting(false);
     }
   };
 
@@ -2655,7 +2679,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         title={editingSession ? '直播明细' : '新增直播场次'}
         open={modalVisible}
         onOk={handleSubmit}
+        confirmLoading={sessionSaving}
         onCancel={() => {
+          if (sessionSavingRef.current) return;
           setModalVisible(false);
           setEditingSession(null);
           setShowPostDataSection(false);
@@ -2971,7 +2997,11 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         title="批量新增达人排期"
         open={batchModalVisible}
         onOk={handleBatchSubmit}
-        onCancel={() => setBatchModalVisible(false)}
+        confirmLoading={batchSaving}
+        onCancel={() => {
+          if (batchSavingRef.current) return;
+          setBatchModalVisible(false);
+        }}
         width={560}
       >
         <Form form={batchForm} layout="vertical">
@@ -3006,9 +3036,13 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         title="批量删除排期"
         open={batchDeleteModalVisible}
         onOk={handleBatchDeleteSubmit}
-        onCancel={() => setBatchDeleteModalVisible(false)}
+        confirmLoading={batchDeleting}
+        onCancel={() => {
+          if (batchDeletingRef.current) return;
+          setBatchDeleteModalVisible(false);
+        }}
         okText="删除"
-        okButtonProps={{ danger: true }}
+        okButtonProps={{ danger: true, loading: batchDeleting }}
         width={560}
       >
         <Form form={batchDeleteForm} layout="vertical">
