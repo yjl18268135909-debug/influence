@@ -903,6 +903,33 @@ code {
   font-size: var(--schedule-card-font-size);
 }
 
+.schedule-session-block .schedule-session-title {
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  margin-top: 0;
+  overflow: visible;
+  white-space: nowrap;
+  text-overflow: clip;
+}
+
+.schedule-session-block .schedule-session-title > strong,
+.schedule-session-block .schedule-session-title > .schedule-session-brand-link {
+  display: inline-block !important;
+  flex: 0 1 auto;
+  max-width: calc(100% - 78px);
+  margin-top: 0;
+  font-size: var(--schedule-title-font-size) !important;
+  line-height: 20px;
+}
+
+.schedule-session-block .schedule-session-title > .schedule-session-cooperation-mode {
+  display: inline-flex !important;
+  flex: none;
+  margin-top: 0;
+}
+
 .schedule-session-block .schedule-session-estimated-profit {
   overflow: visible;
   white-space: nowrap;
