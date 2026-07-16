@@ -182,6 +182,8 @@ const statusMeta: Record<string, { text: string; color: string; badge: 'default'
   cancelled: { text: '已取消', color: 'red', badge: 'error' },
 };
 
+const influencerTierOrder = ['超头部达人', '头部达人', '腰部达人', '尾部达人'];
+
 const communicationExportFieldOptions = [
   { label: '排期日期', value: 'date' },
   { label: '开播时间', value: 'time' },
@@ -422,6 +424,29 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return <Tag color={meta.color}>{meta.text}</Tag>;
   };
 
+  const getInfluencerTier = (name: string) => {
+    return influencers.find((item) => (item.name || '') === name)?.tier || '';
+  };
+
+  const getInfluencerTierRank = (name: string) => {
+    const tier = getInfluencerTier(name);
+    const index = influencerTierOrder.indexOf(tier);
+    return index >= 0 ? index : influencerTierOrder.length;
+  };
+
+  const formatInfluencerRowName = (name: string) => {
+    const tier = getInfluencerTier(name);
+    return tier ? `${name}（${tier}）` : name;
+  };
+
+  const sortInfluencerEntries = (entries: Array<[string, number]>) => {
+    return entries.sort((a, b) => (
+      getInfluencerTierRank(a[0]) - getInfluencerTierRank(b[0])
+      || a[1] - b[1]
+      || a[0].localeCompare(b[0])
+    ));
+  };
+
   const timelineDays = useMemo(() => {
     const start = timelineWeek.startOf('day');
     const days = 31;
@@ -445,10 +470,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       }
     });
 
-    return Array.from(firstSessionMap.entries())
-      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+    return sortInfluencerEntries(Array.from(firstSessionMap.entries()))
       .map(([name]) => name);
-  }, [filteredSessions, timelineDays]);
+  }, [filteredSessions, influencers, timelineDays]);
 
   const postDataInfluencers = useMemo(() => {
     const rangeStart = timelineDays[0].startOf('day');
@@ -468,10 +492,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       }
     });
 
-    return Array.from(firstSessionMap.entries())
-      .sort((a, b) => a[1] - b[1] || a[0].localeCompare(b[0]))
+    return sortInfluencerEntries(Array.from(firstSessionMap.entries()))
       .map(([name]) => name);
-  }, [filteredSessions, timelineDays]);
+  }, [filteredSessions, influencers, timelineDays]);
 
   const getDaySessionCount = (day: Dayjs) => {
     return filteredSessions.filter((item) => {
@@ -480,8 +503,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     }).length;
   };
 
-  const getInfluencerColor = (name: string) => {
-    const index = timelineInfluencers.indexOf(name);
+  const getInfluencerColor = (name: string, orderedNames = timelineInfluencers) => {
+    const index = orderedNames.indexOf(name);
     return scheduleColors[index % scheduleColors.length];
   };
 
@@ -2015,8 +2038,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           return (
             <React.Fragment key={`post-${name}`}>
               <div className="schedule-name-cell schedule-row-name">
-                <span className="schedule-dot" style={{ background: getInfluencerColor(name) }} />
-                {name}
+                <span className="schedule-dot" style={{ background: getInfluencerColor(name, postDataInfluencers) }} />
+                {formatInfluencerRowName(name)}
               </div>
               {timelineDays.map((day) => {
               const dayItems = influencerPostDataItems.filter((item) => isSessionOnDay(item, day));
@@ -2212,7 +2235,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
             <React.Fragment key={name}>
               <div className="schedule-name-cell schedule-row-name">
                 <span className="schedule-dot" style={{ background: getInfluencerColor(name) }} />
-                {name}
+                {formatInfluencerRowName(name)}
               </div>
               {timelineDays.map((day) => {
               const dayItems = influencerTimelineItems.filter((item) => {
