@@ -545,14 +545,14 @@ code {
   --schedule-zoom: 1;
   --schedule-header-height: calc(54px * var(--schedule-zoom));
   --schedule-total-height: calc(48px * var(--schedule-zoom));
-  --schedule-cell-padding: clamp(3px, calc(8px * var(--schedule-zoom)), 12px);
-  --schedule-header-padding: clamp(5px, calc(10px * var(--schedule-zoom)), 14px);
-  --schedule-card-padding-y: clamp(3px, calc(7px * var(--schedule-zoom)), 10px);
-  --schedule-card-padding-x: clamp(4px, calc(8px * var(--schedule-zoom)), 12px);
-  --schedule-card-font-size: clamp(9px, calc(12px * var(--schedule-zoom)), 15px);
-  --schedule-title-font-size: clamp(10px, calc(14px * var(--schedule-zoom)), 17px);
-  --schedule-row-min-height: clamp(48px, calc(86px * var(--schedule-zoom)), 132px);
-  --schedule-period-min-height: clamp(78px, calc(176px * var(--schedule-zoom)), 246px);
+  --schedule-cell-padding: clamp(2px, calc(8px * var(--schedule-zoom)), 12px);
+  --schedule-header-padding: clamp(4px, calc(10px * var(--schedule-zoom)), 14px);
+  --schedule-card-padding-y: clamp(2px, calc(7px * var(--schedule-zoom)), 10px);
+  --schedule-card-padding-x: clamp(3px, calc(8px * var(--schedule-zoom)), 12px);
+  --schedule-card-font-size: clamp(8px, calc(12px * var(--schedule-zoom)), 15px);
+  --schedule-title-font-size: clamp(9px, calc(14px * var(--schedule-zoom)), 17px);
+  --schedule-row-min-height: clamp(36px, calc(86px * var(--schedule-zoom)), 132px);
+  --schedule-period-min-height: clamp(56px, calc(176px * var(--schedule-zoom)), 246px);
 }
 
 .schedule-toolbar {

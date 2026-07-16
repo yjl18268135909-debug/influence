@@ -538,7 +538,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       );
     });
 
-    const minHeight = Math.ceil(78 * zoomFactor);
+    const minHeight = Math.max(56, Math.ceil(78 * zoomFactor));
     return {
       '--schedule-daytime-slot-height': `${Math.max(daytimeHeight, minHeight)}px`,
       '--schedule-evening-slot-height': `${Math.max(eveningHeight, minHeight)}px`,
@@ -2222,10 +2222,10 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         <Space className="schedule-zoom-control" align="center">
           <Button
             icon={<ZoomOutOutlined />}
-            onClick={() => setScheduleZoom((value) => Math.max(40, value - 10))}
+            onClick={() => setScheduleZoom((value) => Math.max(25, value - 10))}
           />
           <Slider
-            min={40}
+            min={25}
             max={100}
             step={5}
             value={scheduleZoom}
