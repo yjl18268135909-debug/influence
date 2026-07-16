@@ -202,6 +202,13 @@ code {
   border-radius: 8px;
 }
 
+.schedule-freeze-grid {
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  position: relative;
+}
+
 .post-data-grid.schedule-freeze-grid {
   --schedule-zoom: 1;
   --schedule-header-height: 54px;
@@ -591,6 +598,7 @@ code {
   position: sticky;
   top: 0;
   z-index: 6;
+  box-shadow: 0 1px 0 #f0f0f0;
 }
 
 .schedule-freeze-grid .schedule-header.schedule-name-cell {
@@ -602,6 +610,7 @@ code {
   position: sticky;
   top: var(--schedule-header-height);
   z-index: 6;
+  box-shadow: 0 1px 0 #f0f0f0;
 }
 
 .schedule-freeze-grid .schedule-total-name {
