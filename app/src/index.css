@@ -768,17 +768,25 @@ code {
 }
 
 .schedule-session-title strong {
+  display: block;
   flex: 1;
   min-width: 0;
   font-size: var(--schedule-title-font-size);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .schedule-session-brand-link {
+  display: block;
   flex: 1;
   min-width: 0;
   color: inherit;
-  font-size: var(--schedule-title-font-size);
+  font-size: var(--schedule-title-font-size) !important;
   font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   cursor: pointer;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -789,7 +797,10 @@ code {
 }
 
 .schedule-session-cooperation-mode {
+  display: inline-flex !important;
   flex: none;
+  align-items: center;
+  justify-content: center;
   max-width: 72px;
   margin-top: 0 !important;
   padding: 1px 5px;
