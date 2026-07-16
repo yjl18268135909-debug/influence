@@ -768,11 +768,13 @@ code {
 }
 
 .schedule-session-title strong {
+  flex: 1;
   min-width: 0;
   font-size: var(--schedule-title-font-size);
 }
 
 .schedule-session-brand-link {
+  flex: 1;
   min-width: 0;
   color: inherit;
   font-size: var(--schedule-title-font-size);
@@ -784,6 +786,22 @@ code {
 
 .schedule-session-brand-link:hover {
   color: #1677ff;
+}
+
+.schedule-session-cooperation-mode {
+  flex: none;
+  max-width: 72px;
+  margin-top: 0 !important;
+  padding: 1px 5px;
+  color: rgba(0, 0, 0, 0.72);
+  font-size: clamp(8px, calc(11px * var(--schedule-zoom)), 12px) !important;
+  font-weight: 600;
+  line-height: 16px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  white-space: nowrap !important;
 }
 
 .export-field-checkboxes {

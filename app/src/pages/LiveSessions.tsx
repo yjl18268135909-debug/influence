@@ -2336,6 +2336,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                 const merchantIntroId = getSessionMerchantIntroId(item);
                 const brandName = formatBrandName(item.merchant_name);
                 const cooperationMode = getSessionBrandCooperationMode(item);
+                const showCooperationMode = communicationOnly
+                  && brandName !== '未添加品牌信息'
+                  && !isEmptyDisplayValue(cooperationMode);
                 const estimatedProfit = getEstimatedSessionProfit(item);
                 return (
                   <div
@@ -2388,6 +2391,11 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                           {communicationOnly ? brandName : formatInlineInfo(brandName, cooperationMode && cooperationMode !== '未填写' ? cooperationMode : undefined)}
                         </strong>
                       )}
+                      {showCooperationMode ? (
+                        <span className="schedule-session-cooperation-mode">
+                          {cooperationMode}
+                        </span>
+                      ) : null}
                     </span>
                     {formatTimelineSessionMeta(item) ? <span>{formatTimelineSessionMeta(item)}</span> : null}
                     {communicationOnly ? (
