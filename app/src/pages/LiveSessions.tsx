@@ -601,6 +601,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     if (!isEmptyDisplayValue(item.merchant_cooperation_mode)) return item.merchant_cooperation_mode;
     return getMerchantCooperationMode(item.merchant_id, item.merchant_name);
   };
+
+  const isSelfOperatedCooperationMode = (value?: string) => String(value || '').trim() === '自营';
+
   const getSessionMerchantIntroId = (item: any) => {
     const merchant = merchants.find((merchantItem) => {
       const itemId = merchantItem.id || merchantItem._id;
@@ -2336,6 +2339,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                 const merchantIntroId = getSessionMerchantIntroId(item);
                 const brandName = formatBrandName(item.merchant_name);
                 const cooperationMode = getSessionBrandCooperationMode(item);
+                const showTravelCostShare = !isSelfOperatedCooperationMode(cooperationMode);
                 const showCooperationMode = communicationOnly
                   && brandName !== '未添加品牌信息'
                   && !isEmptyDisplayValue(cooperationMode);
@@ -2404,7 +2408,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                           {getSessionBrandCategory(item)}
                         </span>
                         {renderInlineMetricField(item, 'expected_gmv', '目标GMV', Number(item.expected_gmv || 0))}
-                        {renderInlineMetricField(item, 'travel_cost_share', '机酒均摊', Number(item.travel_cost_share || 0))}
+                        {showTravelCostShare ? renderInlineMetricField(item, 'travel_cost_share', '机酒均摊', Number(item.travel_cost_share || 0)) : null}
                       </>
                     ) : (
                       <>
