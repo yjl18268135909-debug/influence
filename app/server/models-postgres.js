@@ -232,7 +232,8 @@ async function ensureLiveSessionColumns() {
       ADD COLUMN IF NOT EXISTS post_live_notes TEXT,
       ADD COLUMN IF NOT EXISTS received_amount DOUBLE PRECISION DEFAULT 0,
       ADD COLUMN IF NOT EXISTS payment_notes TEXT,
-      ADD COLUMN IF NOT EXISTS is_bad_debt BOOLEAN DEFAULT FALSE
+      ADD COLUMN IF NOT EXISTS is_bad_debt BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS is_confirmed BOOLEAN DEFAULT FALSE
   `);
 }
 
@@ -1091,7 +1092,7 @@ const liveSessionColumns = [
   'influencer_travel_note', 'schedule_other_note', 'brand_category', 'brand_cooperation_mode', 'brand_assistant_status', 'plan_notes',
   'execution_notes', 'cost_notes', 'actual_gmv_sgd', 'actual_received_gmv_sgd', 'big_screen_screenshot', 'actual_traffic_usd',
   'screen_traffic_sgd', 'actual_traffic_provider', 'traffic_receivable_type', 'traffic_receivable_amount',
-  'traffic_notes', 'post_live_notes', 'received_amount', 'payment_notes', 'is_bad_debt',
+  'traffic_notes', 'post_live_notes', 'received_amount', 'payment_notes', 'is_bad_debt', 'is_confirmed',
 ];
 
 function liveSessionValues(data, influencerId, merchantId) {
@@ -1142,6 +1143,7 @@ function liveSessionValues(data, influencerId, merchantId) {
     data.received_amount || 0,
     data.payment_notes || null,
     Boolean(data.is_bad_debt),
+    Boolean(data.is_confirmed),
   ];
 }
 

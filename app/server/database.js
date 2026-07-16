@@ -175,6 +175,7 @@ function initDatabase() {
   ensureColumn('live_sessions', 'received_amount', 'REAL DEFAULT 0');
   ensureColumn('live_sessions', 'payment_notes', 'TEXT');
   ensureColumn('live_sessions', 'is_bad_debt', 'INTEGER DEFAULT 0');
+  ensureColumn('live_sessions', 'is_confirmed', 'INTEGER DEFAULT 0');
 
   // 订单表
   db.exec(`

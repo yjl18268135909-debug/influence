@@ -848,9 +848,9 @@ function createLiveSession(data) {
       brand_category, brand_cooperation_mode, brand_assistant_status, plan_notes, execution_notes, cost_notes,
       actual_gmv_sgd, actual_received_gmv_sgd, big_screen_screenshot, actual_traffic_usd, screen_traffic_sgd, actual_traffic_provider,
       traffic_receivable_type, traffic_receivable_amount, traffic_notes, post_live_notes,
-      received_amount, payment_notes, is_bad_debt
+      received_amount, payment_notes, is_bad_debt, is_confirmed
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     influencerId,
@@ -898,7 +898,8 @@ function createLiveSession(data) {
     data.post_live_notes || null,
     data.received_amount || 0,
     data.payment_notes || null,
-    data.is_bad_debt ? 1 : 0
+    data.is_bad_debt ? 1 : 0,
+    data.is_confirmed ? 1 : 0
   );
   return { id: result.lastInsertRowid, ...data, influencer_id: influencerId, merchant_id: merchantId };
 }
@@ -916,7 +917,7 @@ function updateLiveSession(id, data) {
         brand_category = ?, brand_cooperation_mode = ?, brand_assistant_status = ?, plan_notes = ?, execution_notes = ?, cost_notes = ?,
         actual_gmv_sgd = ?, actual_received_gmv_sgd = ?, big_screen_screenshot = ?, actual_traffic_usd = ?, screen_traffic_sgd = ?,
         actual_traffic_provider = ?, traffic_receivable_type = ?, traffic_receivable_amount = ?, traffic_notes = ?,
-        post_live_notes = ?, received_amount = ?, payment_notes = ?, is_bad_debt = ?
+        post_live_notes = ?, received_amount = ?, payment_notes = ?, is_bad_debt = ?, is_confirmed = ?
     WHERE id = ?
   `);
   stmt.run(
@@ -966,6 +967,7 @@ function updateLiveSession(id, data) {
     data.received_amount || 0,
     data.payment_notes || null,
     data.is_bad_debt ? 1 : 0,
+    data.is_confirmed ? 1 : 0,
     id
   );
   return { id, ...data, influencer_id: influencerId, merchant_id: merchantId };

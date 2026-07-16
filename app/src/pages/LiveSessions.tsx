@@ -434,6 +434,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return hasPostLiveData(item) ? 'completed' : 'scheduled';
   };
 
+  const isSessionConfirmed = (item: any) => Boolean(item) && (item.is_confirmed === true || item.is_confirmed === 1 || item.is_confirmed === '1');
+
   const renderSessionStatusTag = (_status: string, record: any) => {
     const displayStatus = getSessionDisplayStatus(record);
     const meta = statusMeta[displayStatus] || statusMeta.scheduled;
@@ -787,6 +789,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         merchant_id: merchantId,
         platform: values.platform || '',
         schedule_type: values.schedule_type || 'session',
+        is_confirmed: isSessionConfirmed(editingSession) || isSessionConfirmed(values),
         cargo_sheet: values.cargo_sheet || getMerchantCargoSheet(merchantId, merchantName),
         brand_category: isEmptyDisplayValue(values.brand_category) ? getMerchantCategory(merchantId, merchantName) : values.brand_category,
         brand_cooperation_mode: isEmptyDisplayValue(values.brand_cooperation_mode) ? getMerchantCooperationMode(merchantId, merchantName) : values.brand_cooperation_mode,
@@ -863,6 +866,24 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     } catch (error: any) {
       console.error('删除直播场次失败:', error);
       message.error(error?.response?.data?.error || '删除失败');
+    }
+  };
+
+  const handleConfirmSession = async (record: any) => {
+    const payload = {
+      ...record,
+      is_confirmed: true,
+    };
+
+    try {
+      if (record.id && !String(record.id).startsWith('local-') && !String(record.id).startsWith('demo-')) {
+        await liveSessionApi.update(record.id, payload);
+      }
+      setSessions((prev) => prev.map((item) => getInlineSessionKey(item) === getInlineSessionKey(record) ? payload : item));
+      message.success('场次已确认');
+    } catch (error) {
+      console.error('确认场次失败:', error);
+      message.error('确认失败');
     }
   };
 
@@ -1517,8 +1538,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           return (
             <div
               key={item.id || `${item.session_date}-${item.influencer_name}`}
-              className="calendar-session-item"
-              style={ownerColor === 'default' ? undefined : { borderColor: ownerColor, background: `${ownerColor}0f` }}
+              className={`calendar-session-item ${isSessionConfirmed(item) ? 'calendar-session-item-confirmed' : ''}`}
+              style={isSessionConfirmed(item) || ownerColor === 'default' ? undefined : { borderColor: ownerColor, background: `${ownerColor}0f` }}
             >
               <Badge status={meta.badge} />
               <span className="calendar-session-item-body">
@@ -2170,7 +2191,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
               const renderPostDataCard = (item: any) => (
                 <div
                   key={item.id || `${item.session_date}-${item.merchant_name}`}
-                  className={`post-data-session-card ${selectedPostDataSessionKey === getInlineSessionKey(item) ? 'post-data-session-card-selected' : ''}`}
+                  className={`post-data-session-card ${isSessionConfirmed(item) ? 'post-data-session-card-confirmed' : ''} ${selectedPostDataSessionKey === getInlineSessionKey(item) ? 'post-data-session-card-selected' : ''}`}
                   role="button"
                   tabIndex={0}
                   title="双击打开播后数据登记"
@@ -2429,8 +2450,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                     key={item.id || `${item.session_date}-${item.merchant_name}`}
                     role="button"
                     tabIndex={0}
-                    className="schedule-session-block"
-                    style={{ borderColor: color, background: `${color}18`, color }}
+                    className={`schedule-session-block ${isSessionConfirmed(item) ? 'schedule-session-block-confirmed' : ''}`}
+                    style={isSessionConfirmed(item) ? { color } : { borderColor: color, background: `${color}18`, color }}
                     title="双击修改排期"
                     onClick={(event) => {
                       event.stopPropagation();
@@ -2510,6 +2531,25 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                       </span>
                     ) : null}
                     <div className="schedule-session-actions">
+                      <span
+                        className={`schedule-session-action ${isSessionConfirmed(item) ? 'schedule-session-action-confirmed' : ''}`}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          if (!isSessionConfirmed(item)) {
+                            handleConfirmSession(item);
+                          }
+                        }}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if ((event.key === 'Enter' || event.key === ' ') && !isSessionConfirmed(item)) {
+                            handleConfirmSession(item);
+                          }
+                        }}
+                      >
+                        {isSessionConfirmed(item) ? '已确认' : '确认'}
+                      </span>
                       <Popconfirm
                         title="删除场次"
                         description="确定删除这场直播排期吗？"
