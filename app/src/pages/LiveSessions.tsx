@@ -2006,7 +2006,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       </Space>
 
       <div
-        className="post-data-grid"
+        className="post-data-grid schedule-freeze-grid"
         style={{ gridTemplateColumns: `160px repeat(${timelineDays.length}, minmax(240px, 1fr))` }}
       >
         <div className="schedule-header schedule-name-cell">达人</div>
@@ -2203,7 +2203,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
       <div
         ref={scheduleRef}
-        className="influencer-schedule"
+        className="influencer-schedule schedule-freeze-grid"
         style={{
           '--schedule-zoom': scheduleZoom / 100,
           gridTemplateColumns: `calc(150px * var(--schedule-zoom)) repeat(${timelineDays.length}, calc(${communicationOnly ? 220 : 150}px * var(--schedule-zoom)))`,
