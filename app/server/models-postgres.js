@@ -261,7 +261,9 @@ async function ensureMerchantColumns() {
       ADD COLUMN IF NOT EXISTS country TEXT,
       ADD COLUMN IF NOT EXISTS merchant_owner TEXT,
       ADD COLUMN IF NOT EXISTS primary_category TEXT,
-      ADD COLUMN IF NOT EXISTS secondary_category TEXT
+      ADD COLUMN IF NOT EXISTS secondary_category TEXT,
+      ADD COLUMN IF NOT EXISTS brand_priority TEXT,
+      ADD COLUMN IF NOT EXISTS main_effect TEXT
   `);
 }
 
@@ -921,19 +923,21 @@ async function createMerchant(data) {
   await ensureMerchantColumns();
   const row = await one(
     `INSERT INTO merchants (
-      name, country, merchant_owner, category, primary_category, secondary_category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
+      name, brand_priority, country, merchant_owner, category, primary_category, secondary_category, main_effect, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
       supply_price_sheet_url, cargo_sheet_url, cooperation_mode, cooperation_notes, brand_address,
       brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name, has_strong_assistant, merchant_store
     )
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
     RETURNING id`,
     [
       data.name,
+      data.brand_priority || null,
       data.country || null,
       data.merchant_owner || null,
       data.category || data.primary_category || null,
       data.primary_category || data.category || null,
       data.secondary_category || null,
+      data.main_effect || null,
       data.contact_person || null,
       data.email || null,
       data.phone || null,
@@ -964,21 +968,23 @@ async function updateMerchant(id, data) {
   await ensureMerchantColumns();
   await query(
     `UPDATE merchants
-     SET name = $1, country = $2, merchant_owner = $3, category = $4, primary_category = $5, secondary_category = $6,
-         contact_person = $7, email = $8, phone = $9, platform = $10,
-         commission_rate = $11, settlement_cycle = $12, status = $13, notes = $14,
-         supply_price_sheet_url = $15, cargo_sheet_url = $16, cooperation_mode = $17,
-         cooperation_notes = $18, brand_address = $19, brand_intro = $20,
-         brand_assistants = $21, brand_live_venue = $22, brand_cards = $23,
-         other_files = $24, company_name = $25, has_strong_assistant = $26, merchant_store = $27, updated_at = CURRENT_TIMESTAMP
-     WHERE id = $28`,
+     SET name = $1, brand_priority = $2, country = $3, merchant_owner = $4, category = $5, primary_category = $6, secondary_category = $7, main_effect = $8,
+         contact_person = $9, email = $10, phone = $11, platform = $12,
+         commission_rate = $13, settlement_cycle = $14, status = $15, notes = $16,
+         supply_price_sheet_url = $17, cargo_sheet_url = $18, cooperation_mode = $19,
+         cooperation_notes = $20, brand_address = $21, brand_intro = $22,
+         brand_assistants = $23, brand_live_venue = $24, brand_cards = $25,
+         other_files = $26, company_name = $27, has_strong_assistant = $28, merchant_store = $29, updated_at = CURRENT_TIMESTAMP
+     WHERE id = $30`,
     [
       data.name,
+      data.brand_priority || null,
       data.country || null,
       data.merchant_owner || null,
       data.category || data.primary_category || null,
       data.primary_category || data.category || null,
       data.secondary_category || null,
+      data.main_effect || null,
       data.contact_person || null,
       data.email || null,
       data.phone || null,

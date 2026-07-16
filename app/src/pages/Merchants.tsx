@@ -17,6 +17,7 @@ const PLATFORM_OPTIONS = [
 
 const COOPERATION_MODE_OPTIONS = ['TAP', 'TSP', '英弗自营', '达播自营'];
 const ASSISTANT_OPTIONS = ['是（强助播）', '是（一般助播）', '否'];
+const BRAND_PRIORITY_OPTIONS = ['P00', 'P0', 'P1', '潜力P0'];
 
 const normalizeAssistantStatus = (value?: string) => {
   if (value === '是') return '是（强助播）';
@@ -43,10 +44,12 @@ const normalizeCommissionRate = (value: unknown) => {
 const MERCHANT_EXPORT_COLUMNS = [
   { key: 'id', label: '序号' },
   { key: 'name', label: '商家名称', required: true },
+  { key: 'brand_priority', label: '品牌优先级' },
   { key: 'country', label: '国家' },
   { key: 'merchant_owner', label: '对应负责人（对接小二）' },
   { key: 'primary_category', label: '一级类目' },
   { key: 'secondary_category', label: '二级类目' },
+  { key: 'main_effect', label: '主打功效' },
   { key: 'platform', label: '平台' },
   { key: 'cooperation_mode', label: '合作模式' },
   { key: 'has_strong_assistant', label: '是否有助播' },
@@ -148,12 +151,14 @@ const renderPlatformTags = (platform?: string | string[]) => {
 interface Merchant {
   id: number;
   name: string;
+  brand_priority?: string;
   country?: string;
   merchant_owner?: string;
   platform: string;
   category?: string;
   primary_category?: string;
   secondary_category?: string;
+  main_effect?: string;
   contact_person: string;
   email: string;
   phone: string;
@@ -362,10 +367,12 @@ const Merchants: React.FC = () => {
   const formatMerchantExportRow = (merchant: Merchant, index = 0) => ({
     序号: index + 1,
     商家名称: merchant.name || '',
+    品牌优先级: merchant.brand_priority || '',
     国家: merchant.country || '',
     '对应负责人（对接小二）': merchant.merchant_owner || '',
     一级类目: merchant.primary_category || merchant.category || '',
     二级类目: merchant.secondary_category || '',
+    主打功效: merchant.main_effect || '',
     平台: normalizePlatforms(merchant.platform).join('/'),
     合作模式: normalizeCooperationMode(merchant.cooperation_mode) || '',
     是否有助播: normalizeAssistantStatus(merchant.has_strong_assistant),
@@ -407,6 +414,15 @@ const Merchants: React.FC = () => {
       width: 140,
       fixed: 'left',
       sorter: (a, b) => a.name.localeCompare(b.name),
+    },
+    {
+      title: '品牌优先级',
+      dataIndex: 'brand_priority',
+      key: 'brand_priority',
+      width: 120,
+      render: (value?: string) => value ? <Tag color="blue">{value}</Tag> : '未填写',
+      filters: BRAND_PRIORITY_OPTIONS.map((priority) => ({ text: priority, value: priority })),
+      onFilter: (value, record) => record.brand_priority === value,
     },
     {
       title: '国家',
@@ -456,6 +472,13 @@ const Merchants: React.FC = () => {
       render: (value?: string) => value ? <Tag>{value}</Tag> : '未填写',
       filters: secondaryCategoryOptions.map((item) => ({ text: item, value: item })),
       onFilter: (value, record) => record.secondary_category === value,
+    },
+    {
+      title: '主打功效',
+      dataIndex: 'main_effect',
+      key: 'main_effect',
+      width: 140,
+      render: (value?: string) => value || '未填写',
     },
     {
       title: '平台',
@@ -794,13 +817,17 @@ const Merchants: React.FC = () => {
               const primaryCategory = item.primary_category || item['一级类目'] || item.category || item['商家分类'];
               const secondaryCategory = item.secondary_category || item['二级类目'];
               const merchantOwner = item.merchant_owner || item['对应负责人（对接小二）'] || item['对应负责人'];
+              const brandPriority = item.brand_priority || item['品牌优先级'];
+              const mainEffect = item.main_effect || item['主打功效'];
               try {
                 await merchantApi.create({
                   ...item,
+                  brand_priority: brandPriority || '',
                   merchant_owner: merchantOwner || '',
                   has_strong_assistant: normalizeAssistantStatus(assistantStatus),
                   primary_category: primaryCategory || '',
                   secondary_category: secondaryCategory || '',
+                  main_effect: mainEffect || '',
                   category: primaryCategory || '',
                   cooperation_mode: normalizeCooperationMode(item.cooperation_mode || item['合作模式']),
                   commission_rate: normalizeCommissionRate(item.commission_rate || item['佣金率']),
@@ -829,7 +856,7 @@ const Merchants: React.FC = () => {
             onChange: setSelectedRowKeys,
             preserveSelectedRowKeys: true,
           }}
-          scroll={{ x: 2200 }}
+          scroll={{ x: 2460 }}
           pagination={{
             showSizeChanger: true,
             showTotal: (total) => `共 ${total} 条记录`,
@@ -851,6 +878,13 @@ const Merchants: React.FC = () => {
             rules={[{ required: true, message: '请输入商家名称' }]}
           >
             <Input placeholder="请输入商家名称" />
+          </Form.Item>
+          <Form.Item name="brand_priority" label="品牌优先级">
+            <Select placeholder="请选择品牌优先级" allowClear>
+              {BRAND_PRIORITY_OPTIONS.map((priority) => (
+                <Option key={priority} value={priority}>{priority}</Option>
+              ))}
+            </Select>
           </Form.Item>
           <Form.Item name="country" label="国家">
             <Select placeholder="请选择或输入国家" allowClear showSearch mode="tags" maxCount={1}>
@@ -887,6 +921,9 @@ const Merchants: React.FC = () => {
                 <Option key={category} value={category}>{category}</Option>
               ))}
             </Select>
+          </Form.Item>
+          <Form.Item name="main_effect" label="主打功效">
+            <Input placeholder="请输入主打功效" />
           </Form.Item>
           <Form.Item
             name="platform"

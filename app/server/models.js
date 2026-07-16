@@ -650,19 +650,21 @@ function getMerchants(filters = {}) {
 function createMerchant(data) {
   const stmt = db.prepare(`
     INSERT INTO merchants (
-      name, country, merchant_owner, category, primary_category, secondary_category, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
+      name, brand_priority, country, merchant_owner, category, primary_category, secondary_category, main_effect, contact_person, email, phone, platform, commission_rate, settlement_cycle, status, notes,
       supply_price_sheet_url, cargo_sheet_url, cooperation_mode, cooperation_notes, brand_address,
       brand_intro, brand_assistants, brand_live_venue, brand_cards, other_files, company_name, has_strong_assistant, merchant_store
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   const result = stmt.run(
     data.name,
+    data.brand_priority || null,
     data.country || null,
     data.merchant_owner || null,
     data.category || data.primary_category || null,
     data.primary_category || data.category || null,
     data.secondary_category || null,
+    data.main_effect || null,
     data.contact_person || null,
     data.email || null,
     data.phone || null,
@@ -692,7 +694,7 @@ function createMerchant(data) {
 function updateMerchant(id, data) {
   const stmt = db.prepare(`
     UPDATE merchants
-    SET name = ?, country = ?, merchant_owner = ?, category = ?, primary_category = ?, secondary_category = ?,
+    SET name = ?, brand_priority = ?, country = ?, merchant_owner = ?, category = ?, primary_category = ?, secondary_category = ?, main_effect = ?,
         contact_person = ?, email = ?, phone = ?, platform = ?, commission_rate = ?, settlement_cycle = ?,
         status = ?, notes = ?, supply_price_sheet_url = ?, cargo_sheet_url = ?, cooperation_mode = ?, cooperation_notes = ?,
         brand_address = ?, brand_intro = ?, brand_assistants = ?, brand_live_venue = ?, brand_cards = ?, other_files = ?, company_name = ?,
@@ -702,11 +704,13 @@ function updateMerchant(id, data) {
   `);
   stmt.run(
     data.name,
+    data.brand_priority || null,
     data.country || null,
     data.merchant_owner || null,
     data.category || data.primary_category || null,
     data.primary_category || data.category || null,
     data.secondary_category || null,
+    data.main_effect || null,
     data.contact_person || null,
     data.email || null,
     data.phone || null,

@@ -135,6 +135,8 @@ function initDatabase() {
   ensureColumn('merchants', 'merchant_owner', 'TEXT');
   ensureColumn('merchants', 'primary_category', 'TEXT');
   ensureColumn('merchants', 'secondary_category', 'TEXT');
+  ensureColumn('merchants', 'brand_priority', 'TEXT');
+  ensureColumn('merchants', 'main_effect', 'TEXT');
   ensureColumn('influencers', 'tier', 'TEXT');
 
   ensureColumn('live_sessions', 'cargo_sheet', 'TEXT');

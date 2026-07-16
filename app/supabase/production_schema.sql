@@ -40,11 +40,13 @@ create table public.influencers (
 create table public.merchants (
   id serial primary key,
   name text not null,
+  brand_priority text,
   country text,
   merchant_owner text,
   category text,
   primary_category text,
   secondary_category text,
+  main_effect text,
   contact_person text,
   email text,
   phone text,
