@@ -2391,13 +2391,13 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                       }
                     }}
                   >
-                    <span className="schedule-session-title">
+                    <div className="schedule-session-title">
                       {communicationOnly && merchantIntroId ? (
-                        <span
-                          role="link"
-                          tabIndex={0}
+                        <a
+                          href={`/merchants/${merchantIntroId}/introduction`}
                           className="schedule-session-brand-link"
                           onClick={(event) => {
+                            event.preventDefault();
                             event.stopPropagation();
                             navigate(`/merchants/${merchantIntroId}/introduction`, {
                               state: { from: '/schedule-communication', fromLabel: '返回达人排期沟通' },
@@ -2413,18 +2413,18 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                           }}
                         >
                           {brandName}
-                        </span>
+                        </a>
                       ) : (
                         <strong>
                           {communicationOnly ? brandName : formatInlineInfo(brandName, cooperationMode && cooperationMode !== '未填写' ? cooperationMode : undefined)}
                         </strong>
                       )}
                       {showCooperationMode ? (
-                        <span className="schedule-session-cooperation-mode">
+                        <em className="schedule-session-cooperation-mode">
                           {cooperationMode}
-                        </span>
+                        </em>
                       ) : null}
-                    </span>
+                    </div>
                     {formatTimelineSessionMeta(item) ? <span>{formatTimelineSessionMeta(item)}</span> : null}
                     {communicationOnly ? (
                       <>

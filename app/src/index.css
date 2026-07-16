@@ -806,6 +806,7 @@ code {
   padding: 1px 5px;
   color: rgba(0, 0, 0, 0.72);
   font-size: clamp(8px, calc(11px * var(--schedule-zoom)), 12px) !important;
+  font-style: normal;
   font-weight: 600;
   line-height: 16px;
   text-align: center;
