@@ -1333,10 +1333,23 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         {daySessions.length ? <div className="calendar-session-count">共 {daySessions.length} 场</div> : null}
         {daySessions.map((item) => {
           const meta = statusMeta[item.status] || statusMeta.scheduled;
+          const ownerColor = getEmployeeColor(item.owner);
+          const ownerStyle = ownerColor === 'default'
+            ? { color: 'rgba(0, 0, 0, 0.55)', borderColor: '#d9d9d9', background: '#fafafa' }
+            : { color: ownerColor, borderColor: ownerColor, background: `${ownerColor}14` };
           return (
-            <div key={item.id || `${item.session_date}-${item.influencer_name}`} className="calendar-session-item">
+            <div
+              key={item.id || `${item.session_date}-${item.influencer_name}`}
+              className="calendar-session-item"
+              style={ownerColor === 'default' ? undefined : { borderColor: ownerColor, background: `${ownerColor}0f` }}
+            >
               <Badge status={meta.badge} />
-              <span className="calendar-session-item-text">{formatCalendarSessionText(item)}</span>
+              <span className="calendar-session-item-body">
+                <span className="calendar-session-item-text">{formatCalendarSessionText(item)}</span>
+                <span className="calendar-session-owner" style={ownerStyle}>
+                  中控 {item.owner || '未安排'}
+                </span>
+              </span>
             </div>
           );
         })}
