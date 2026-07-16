@@ -237,7 +237,7 @@ interface LiveSessionsProps {
   communicationOnly?: boolean;
 }
 
-type SessionFilters = { influencer?: string; brand?: string; city?: string };
+type SessionFilters = { influencer?: string; brand?: string; city?: string; dateRange?: [string, string] };
 type InlineScheduleField = 'live_venue' | 'owner' | 'assistant' | 'expected_gmv' | 'travel_cost_share' | 'brand_commission_rate' | 'influencer_commission_rate' | 'actual_gmv_sgd' | 'actual_received_gmv_sgd';
 
 const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }) => {
@@ -343,9 +343,16 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       const influencerName = item.influencer_name || '未填写达人';
       const brandName = formatBrandName(item.merchant_name);
       const cityName = item.live_city || '未填写';
+      const sessionDay = dayjs(item.session_date);
+      const matchDateRange = !filters.dateRange
+        || (
+          !sessionDay.isBefore(dayjs(filters.dateRange[0]), 'day')
+          && !sessionDay.isAfter(dayjs(filters.dateRange[1]), 'day')
+        );
       return (!filters.influencer || influencerName === filters.influencer)
         && (!filters.brand || brandName === filters.brand)
-        && (!filters.city || cityName === filters.city);
+        && (!filters.city || cityName === filters.city)
+        && matchDateRange;
     });
   }, [filters, sessions]);
 
@@ -2463,7 +2470,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       </Space>
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }} align="middle">
-        <Col xs={24} md={7} lg={6}>
+        <Col xs={24} md={12} lg={5}>
           <Select
             placeholder="按达人筛选"
             allowClear
@@ -2476,7 +2483,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
             {filterOptions.influencers.map((name) => <Option key={name} value={name}>{name}</Option>)}
           </Select>
         </Col>
-        <Col xs={24} md={7} lg={6}>
+        <Col xs={24} md={12} lg={5}>
           <Select
             placeholder="按品牌筛选"
             allowClear
@@ -2489,7 +2496,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
             {filterOptions.brands.map((name) => <Option key={name} value={name}>{name}</Option>)}
           </Select>
         </Col>
-        <Col xs={24} md={7} lg={6}>
+        <Col xs={24} md={12} lg={5}>
           <Select
             placeholder="按直播城市筛选"
             allowClear
@@ -2502,7 +2509,20 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
             {filterOptions.cities.map((name) => <Option key={name} value={name}>{name}</Option>)}
           </Select>
         </Col>
-        <Col xs={24} md={3} lg={3}>
+        <Col xs={24} md={12} lg={6}>
+          <RangePicker
+            style={{ width: '100%' }}
+            value={filters.dateRange ? [dayjs(filters.dateRange[0]), dayjs(filters.dateRange[1])] : null}
+            onChange={(value) => {
+              setCurrentFilters((prev) => ({
+                ...prev,
+                dateRange: value ? [value[0]!.format('YYYY-MM-DD'), value[1]!.format('YYYY-MM-DD')] : undefined,
+              }));
+            }}
+            placeholder={['开始时间', '结束时间']}
+          />
+        </Col>
+        <Col xs={24} md={12} lg={3}>
           <Button block onClick={() => setCurrentFilters({})}>
             清除筛选
           </Button>
