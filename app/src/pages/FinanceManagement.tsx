@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, Calendar, Col, DatePicker, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Statistic, Table, Tabs, Tag, message } from 'antd';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
@@ -100,6 +100,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [loadingTravelReceivables, setLoadingTravelReceivables] = useState(false);
   const [loadingTravelPayables, setLoadingTravelPayables] = useState(false);
+  const [savingTravelPayable, setSavingTravelPayable] = useState(false);
   const [loadingExchangeRate, setLoadingExchangeRate] = useState(false);
   const [exchangeRate, setExchangeRate] = useState(DEFAULT_TRAVEL_EXCHANGE_RATE);
   const [exchangeRateMeta, setExchangeRateMeta] = useState<any>({ source: '默认汇率', fallback: true });
@@ -126,6 +127,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   const [receptionForm] = Form.useForm();
   const [receivableAmountForm] = Form.useForm();
   const [collectionDetailForm] = Form.useForm();
+  const savingTravelPayableRef = useRef(false);
   const watchedTravelValues = Form.useWatch([], travelCostForm);
   const watchedReceivableType = Form.useWatch('receivable_type', travelReceivableForm);
 
@@ -763,6 +765,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
   };
 
   const saveTravelPayableRecord = async () => {
+    if (savingTravelPayableRef.current) return;
+    savingTravelPayableRef.current = true;
+    setSavingTravelPayable(true);
     try {
       const values = await travelPayableForm.validateFields();
       const reason = Array.isArray(values.reason) ? values.reason[0] : values.reason;
@@ -798,6 +803,9 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       if (error?.errorFields) return;
       console.error('保存应付款项失败:', error);
       message.error('保存应付款项失败');
+    } finally {
+      savingTravelPayableRef.current = false;
+      setSavingTravelPayable(false);
     }
   };
 
@@ -1705,6 +1713,7 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
         <Button
           type="primary"
           icon={<PlusOutlined />}
+          disabled={savingTravelPayable}
           onClick={() => {
             setEditingTravelPayableRecord(null);
             travelPayableForm.resetFields();
@@ -1832,10 +1841,14 @@ const FinanceManagement: React.FC<FinanceManagementProps> = ({ travelOnly = fals
       open={payableModalOpen}
       onOk={saveTravelPayableRecord}
       onCancel={() => {
+        if (savingTravelPayable) return;
         setPayableModalOpen(false);
         setEditingTravelPayableRecord(null);
         travelPayableForm.resetFields();
       }}
+      confirmLoading={savingTravelPayable}
+      okButtonProps={{ disabled: savingTravelPayable }}
+      cancelButtonProps={{ disabled: savingTravelPayable }}
       okText="保存"
       cancelText="取消"
       width={720}
