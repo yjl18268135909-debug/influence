@@ -508,6 +508,43 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return scheduleColors[index % scheduleColors.length];
   };
 
+  const estimateSlotHeight = (items: any[], variant: 'schedule' | 'post-data', zoomFactor = 1) => {
+    if (!items.length) return 0;
+    const baseCardHeight = variant === 'post-data' ? 118 : (communicationOnly ? 172 : 126);
+    const gapHeight = 6;
+    return Math.ceil((items.length * baseCardHeight + Math.max(items.length - 1, 0) * gapHeight) * zoomFactor);
+  };
+
+  const getRowPeriodSlotStyle = (
+    rowItems: any[],
+    variant: 'schedule' | 'post-data',
+    zoomFactor = 1,
+  ): React.CSSProperties => {
+    let daytimeHeight = 0;
+    let eveningHeight = 0;
+
+    timelineDays.forEach((day) => {
+      const dayItems = rowItems.filter((item) => isSessionOnDay(item, day));
+      const sessionItems = variant === 'schedule'
+        ? dayItems.filter((item) => !isTravelNoteOnly(item))
+        : dayItems;
+      daytimeHeight = Math.max(
+        daytimeHeight,
+        estimateSlotHeight(sessionItems.filter((item) => !isEveningSession(item)), variant, zoomFactor),
+      );
+      eveningHeight = Math.max(
+        eveningHeight,
+        estimateSlotHeight(sessionItems.filter((item) => isEveningSession(item)), variant, zoomFactor),
+      );
+    });
+
+    const minHeight = Math.ceil(78 * zoomFactor);
+    return {
+      '--schedule-daytime-slot-height': `${Math.max(daytimeHeight, minHeight)}px`,
+      '--schedule-evening-slot-height': `${Math.max(eveningHeight, minHeight)}px`,
+    } as React.CSSProperties;
+  };
+
   const getEmployeeColor = (employeeName?: string) => {
     if (!employeeName) return 'default';
     const index = employees.findIndex((item) => item.name === employeeName);
@@ -2030,6 +2067,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
         {postDataInfluencers.map((name) => {
           const influencerPostDataItems = getPostDataSessionsForInfluencer(name);
+          const rowPeriodSlotStyle = getRowPeriodSlotStyle(influencerPostDataItems, 'post-data');
           const rowHasBothSessionPeriods = timelineDays.some((day) => {
             const dayItems = influencerPostDataItems.filter((item) => isSessionOnDay(item, day));
             return dayItems.some((item) => !isEveningSession(item)) && dayItems.some((item) => isEveningSession(item));
@@ -2097,6 +2135,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                 <div
                   key={`post-${name}-${day.format('YYYY-MM-DD')}`}
                   className={`post-data-grid-cell ${dayItems.length ? 'post-data-grid-cell-filled' : ''}`}
+                  style={shouldSplitSessionPeriods ? rowPeriodSlotStyle : undefined}
                   onClick={() => {
                     setSelectedDate(day);
                     setSelectedPostDataSessionKey(null);
@@ -2226,6 +2265,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
         {timelineInfluencers.map((name) => {
           const influencerTimelineItems = getSessionsForInfluencer(name);
+          const rowPeriodSlotStyle = getRowPeriodSlotStyle(influencerTimelineItems, 'schedule', scheduleZoom / 100);
           const rowHasBothSessionPeriods = timelineDays.some((day) => {
             const daySessions = influencerTimelineItems.filter((item) => isSessionOnDay(item, day) && !isTravelNoteOnly(item));
             return daySessions.some((item) => !isEveningSession(item)) && daySessions.some((item) => isEveningSession(item));
@@ -2407,6 +2447,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                 <div
                   key={`${name}-${day.format('YYYY-MM-DD')}`}
                   className="schedule-day-cell"
+                  style={shouldSplitSessionPeriods ? rowPeriodSlotStyle : undefined}
                   onDoubleClick={() => {
                     setSelectedDate(day);
                     openCreateModal(day, name);

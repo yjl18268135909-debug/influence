@@ -727,7 +727,7 @@ code {
 }
 
 .schedule-period-slots-split {
-  grid-template-rows: minmax(var(--schedule-period-min-height), auto) minmax(var(--schedule-period-min-height), auto);
+  grid-template-rows: var(--schedule-daytime-slot-height, auto) var(--schedule-evening-slot-height, auto);
 }
 
 .schedule-period-slots-single {
