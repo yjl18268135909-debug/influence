@@ -510,22 +510,46 @@ code {
   overflow-x: auto;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
+  --schedule-zoom: 1;
+  --schedule-cell-padding: clamp(3px, calc(8px * var(--schedule-zoom)), 12px);
+  --schedule-header-padding: clamp(5px, calc(10px * var(--schedule-zoom)), 14px);
+  --schedule-card-padding-y: clamp(3px, calc(7px * var(--schedule-zoom)), 10px);
+  --schedule-card-padding-x: clamp(4px, calc(8px * var(--schedule-zoom)), 12px);
+  --schedule-card-font-size: clamp(9px, calc(12px * var(--schedule-zoom)), 15px);
+  --schedule-title-font-size: clamp(10px, calc(14px * var(--schedule-zoom)), 17px);
+  --schedule-row-min-height: clamp(48px, calc(86px * var(--schedule-zoom)), 132px);
+  --schedule-period-min-height: clamp(78px, calc(176px * var(--schedule-zoom)), 246px);
+}
+
+.schedule-toolbar {
+  width: 100%;
+  justify-content: space-between;
+}
+
+.schedule-zoom-control {
+  flex: none;
+  padding: 4px 0;
+}
+
+.schedule-zoom-control .ant-slider {
+  width: 150px;
 }
 
 .schedule-header {
-  min-height: 54px;
-  padding: 10px;
+  min-height: calc(54px * var(--schedule-zoom));
+  padding: var(--schedule-header-padding);
   background: #fafafa;
   border-right: 1px solid #f0f0f0;
   border-bottom: 1px solid #f0f0f0;
   font-weight: 600;
+  font-size: var(--schedule-title-font-size);
 }
 
 .schedule-header span {
   display: block;
   margin-top: 2px;
   color: rgba(0, 0, 0, 0.45);
-  font-size: 12px;
+  font-size: var(--schedule-card-font-size);
   font-weight: 400;
 }
 
@@ -537,21 +561,23 @@ code {
 }
 
 .schedule-row-name {
-  min-height: 86px;
-  padding: 12px;
+  min-height: var(--schedule-row-min-height);
+  padding: var(--schedule-header-padding);
   border-right: 1px solid #f0f0f0;
   border-bottom: 1px solid #f0f0f0;
   font-weight: 600;
+  font-size: var(--schedule-title-font-size);
 }
 
 .schedule-total-name,
 .schedule-total-cell {
-  min-height: 48px;
-  padding: 12px;
+  min-height: calc(48px * var(--schedule-zoom));
+  padding: var(--schedule-header-padding);
   border-right: 1px solid #f0f0f0;
   border-bottom: 1px solid #f0f0f0;
   background: #f6ffed;
   font-weight: 600;
+  font-size: var(--schedule-title-font-size);
 }
 
 .schedule-total-cell {
@@ -570,9 +596,9 @@ code {
 .schedule-day-cell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  min-height: 86px;
-  padding: 8px;
+  gap: var(--schedule-cell-padding);
+  min-height: var(--schedule-row-min-height);
+  padding: var(--schedule-cell-padding);
   border-right: 1px solid #f0f0f0;
   border-bottom: 1px solid #f0f0f0;
   background: #fff;
@@ -588,9 +614,9 @@ code {
   align-items: flex-start;
   justify-content: space-between;
   gap: 6px;
-  padding: 4px 6px;
+  padding: calc(var(--schedule-card-padding-y) - 2px) calc(var(--schedule-card-padding-x) - 2px);
   color: #cf1322;
-  font-size: 12px;
+  font-size: var(--schedule-card-font-size);
   line-height: 18px;
   white-space: pre-wrap;
   background: #fff1f0;
@@ -630,11 +656,12 @@ code {
   display: block;
   width: 100%;
   margin-bottom: 6px;
-  padding: 7px 8px;
+  padding: var(--schedule-card-padding-y) var(--schedule-card-padding-x);
   border: 1px solid;
   border-radius: 6px;
   text-align: left;
   cursor: default;
+  font-size: var(--schedule-card-font-size);
 }
 
 .schedule-period-slots {
@@ -643,7 +670,7 @@ code {
 }
 
 .schedule-period-slots-split {
-  grid-template-rows: minmax(176px, auto) minmax(176px, auto);
+  grid-template-rows: minmax(var(--schedule-period-min-height), auto) minmax(var(--schedule-period-min-height), auto);
 }
 
 .schedule-period-slots-single {
@@ -659,7 +686,7 @@ code {
 }
 
 .schedule-period-slots-split .schedule-period-slot {
-  min-height: 176px;
+  min-height: var(--schedule-period-min-height);
 }
 
 .schedule-period-slot-evening {
@@ -685,12 +712,13 @@ code {
 
 .schedule-session-title strong {
   min-width: 0;
+  font-size: var(--schedule-title-font-size);
 }
 
 .schedule-session-brand-link {
   min-width: 0;
   color: inherit;
-  font-size: 13px;
+  font-size: var(--schedule-title-font-size);
   font-weight: 700;
   cursor: pointer;
   text-decoration: underline;
@@ -721,7 +749,7 @@ code {
 
 .schedule-session-action {
   color: rgba(0, 0, 0, 0.45);
-  font-size: 12px;
+  font-size: var(--schedule-card-font-size);
   cursor: pointer;
 }
 
@@ -768,7 +796,7 @@ code {
   gap: 4px;
   margin-top: 4px;
   color: rgba(0, 0, 0, 0.72);
-  font-size: 12px;
+  font-size: var(--schedule-card-font-size);
 }
 
 .schedule-session-inline-editor .ant-select,
@@ -786,7 +814,7 @@ code {
 
 .schedule-session-block span {
   margin-top: 3px;
-  font-size: 12px;
+  font-size: var(--schedule-card-font-size);
 }
 
 .schedule-session-block .schedule-session-estimated-profit {

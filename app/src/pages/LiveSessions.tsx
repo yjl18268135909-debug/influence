@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Badge, Button, Calendar, Checkbox, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Space, Statistic, Table, Tabs, Tag, Upload, message } from 'antd';
-import { DeleteOutlined, EditOutlined, ExportOutlined, PlusOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { Badge, Button, Calendar, Checkbox, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Slider, Space, Statistic, Table, Tabs, Tag, Upload, message } from 'antd';
+import { DeleteOutlined, EditOutlined, ExportOutlined, PlusOutlined, ReloadOutlined, UploadOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -256,6 +256,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const [showPostDataSection, setShowPostDataSection] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
   const [timelineWeek, setTimelineWeek] = useState<Dayjs>(dayjs().startOf('day'));
+  const [scheduleZoom, setScheduleZoom] = useState(100);
   const [selectedPostDataSessionKey, setSelectedPostDataSessionKey] = useState<string | null>(null);
   const [filtersByScope, setFiltersByScope] = useState<Record<string, SessionFilters>>({
     management: {},
@@ -2106,22 +2107,46 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
   const renderTimelineView = () => (
     <div>
-      <Space style={{ marginBottom: 16 }}>
-        <DatePicker
-          picker="month"
-          value={timelineWeek}
-          onChange={(value) => value && setTimelineWeek(value.startOf('month'))}
-        />
-        <Button onClick={() => setTimelineWeek(timelineWeek.subtract(1, 'month'))}>上月</Button>
-        <Button onClick={jumpTimelineToCurrentMonth}>本月</Button>
-        <Button onClick={() => setTimelineWeek(timelineWeek.add(1, 'month'))}>下月</Button>
-        <Button onClick={jumpTimelineToToday}>回到今天</Button>
+      <Space className="schedule-toolbar" style={{ marginBottom: 16 }} wrap>
+        <Space wrap>
+          <DatePicker
+            picker="month"
+            value={timelineWeek}
+            onChange={(value) => value && setTimelineWeek(value.startOf('month'))}
+          />
+          <Button onClick={() => setTimelineWeek(timelineWeek.subtract(1, 'month'))}>上月</Button>
+          <Button onClick={jumpTimelineToCurrentMonth}>本月</Button>
+          <Button onClick={() => setTimelineWeek(timelineWeek.add(1, 'month'))}>下月</Button>
+          <Button onClick={jumpTimelineToToday}>回到今天</Button>
+        </Space>
+        <Space className="schedule-zoom-control" align="center">
+          <Button
+            icon={<ZoomOutOutlined />}
+            onClick={() => setScheduleZoom((value) => Math.max(40, value - 10))}
+          />
+          <Slider
+            min={40}
+            max={140}
+            step={5}
+            value={scheduleZoom}
+            onChange={setScheduleZoom}
+            tooltip={{ formatter: (value) => `${value}%` }}
+          />
+          <Button
+            icon={<ZoomInOutlined />}
+            onClick={() => setScheduleZoom((value) => Math.min(140, value + 10))}
+          />
+          <Button onClick={() => setScheduleZoom(100)}>{scheduleZoom}%</Button>
+        </Space>
       </Space>
 
       <div
         ref={scheduleRef}
         className="influencer-schedule"
-        style={{ gridTemplateColumns: `150px repeat(${timelineDays.length}, minmax(${communicationOnly ? 220 : 150}px, 1fr))` }}
+        style={{
+          '--schedule-zoom': scheduleZoom / 100,
+          gridTemplateColumns: `calc(150px * var(--schedule-zoom)) repeat(${timelineDays.length}, calc(${communicationOnly ? 220 : 150}px * var(--schedule-zoom)))`,
+        } as React.CSSProperties}
       >
         <div className="schedule-header schedule-name-cell">达人</div>
         {timelineDays.map((day) => (
