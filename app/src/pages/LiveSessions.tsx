@@ -2187,7 +2187,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           />
           <Slider
             min={40}
-            max={140}
+            max={100}
             step={5}
             value={scheduleZoom}
             onChange={setScheduleZoom}
@@ -2195,7 +2195,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           />
           <Button
             icon={<ZoomInOutlined />}
-            onClick={() => setScheduleZoom((value) => Math.min(140, value + 10))}
+            onClick={() => setScheduleZoom((value) => Math.min(100, value + 10))}
           />
           <Button onClick={() => setScheduleZoom(100)}>{scheduleZoom}%</Button>
         </Space>
