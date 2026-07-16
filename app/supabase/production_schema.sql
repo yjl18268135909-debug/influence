@@ -127,7 +127,8 @@ create table public.live_sessions (
   schedule_other_note text,
   schedule_type text default 'session',
   brand_category text,
-  brand_cooperation_mode text
+  brand_cooperation_mode text,
+  brand_assistant_status text
 );
 
 create table public.orders (
@@ -242,6 +243,7 @@ alter table public.live_sessions add column if not exists received_amount double
 alter table public.live_sessions add column if not exists actual_received_gmv_sgd double precision default 0;
 alter table public.live_sessions add column if not exists payment_notes text;
 alter table public.live_sessions add column if not exists is_bad_debt boolean default false;
+alter table public.live_sessions add column if not exists brand_assistant_status text;
 
 create table if not exists public.app_accounts (
   id serial primary key,

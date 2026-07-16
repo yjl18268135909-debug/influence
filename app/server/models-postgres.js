@@ -216,6 +216,7 @@ async function ensureLiveSessionColumns() {
       ADD COLUMN IF NOT EXISTS schedule_other_note TEXT,
       ADD COLUMN IF NOT EXISTS brand_category TEXT,
       ADD COLUMN IF NOT EXISTS brand_cooperation_mode TEXT,
+      ADD COLUMN IF NOT EXISTS brand_assistant_status TEXT,
       ADD COLUMN IF NOT EXISTS plan_notes TEXT,
       ADD COLUMN IF NOT EXISTS execution_notes TEXT,
       ADD COLUMN IF NOT EXISTS cost_notes TEXT,
@@ -1072,7 +1073,8 @@ async function getLiveSessions(filters = {}) {
     `SELECT ls.*, i.name as influencer_name, m.name as merchant_name,
             i.commission_rate as influencer_default_commission_rate,
             m.commission_rate as merchant_commission_rate,
-            m.category as merchant_category, m.cooperation_mode as merchant_cooperation_mode
+            m.category as merchant_category, m.cooperation_mode as merchant_cooperation_mode,
+            m.has_strong_assistant as merchant_has_strong_assistant
      FROM live_sessions ls
      LEFT JOIN influencers i ON ls.influencer_id = i.id
      LEFT JOIN merchants m ON ls.merchant_id = m.id
@@ -1086,7 +1088,7 @@ const liveSessionColumns = [
   'influencer_id', 'merchant_id', 'platform', 'session_date', 'duration_hours', 'viewers', 'gmv', 'orders_count',
   'status', 'notes', 'cargo_sheet', 'traffic_plan', 'estimated_ad_cost', 'expected_gmv', 'influencer_commission_rate',
   'brand_commission_rate', 'travel_cost_share', 'brand_receivable', 'owner', 'assistant', 'live_city', 'live_venue', 'live_network', 'samples', 'schedule_type',
-  'influencer_travel_note', 'schedule_other_note', 'brand_category', 'brand_cooperation_mode', 'plan_notes',
+  'influencer_travel_note', 'schedule_other_note', 'brand_category', 'brand_cooperation_mode', 'brand_assistant_status', 'plan_notes',
   'execution_notes', 'cost_notes', 'actual_gmv_sgd', 'actual_received_gmv_sgd', 'big_screen_screenshot', 'actual_traffic_usd',
   'screen_traffic_sgd', 'actual_traffic_provider', 'traffic_receivable_type', 'traffic_receivable_amount',
   'traffic_notes', 'post_live_notes', 'received_amount', 'payment_notes', 'is_bad_debt',
@@ -1123,6 +1125,7 @@ function liveSessionValues(data, influencerId, merchantId) {
     data.schedule_other_note || null,
     data.brand_category || null,
     data.brand_cooperation_mode || null,
+    data.brand_assistant_status || null,
     data.plan_notes || null,
     data.execution_notes || null,
     data.cost_notes || null,

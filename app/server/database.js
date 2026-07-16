@@ -158,6 +158,7 @@ function initDatabase() {
   ensureColumn('live_sessions', 'schedule_other_note', 'TEXT');
   ensureColumn('live_sessions', 'brand_category', 'TEXT');
   ensureColumn('live_sessions', 'brand_cooperation_mode', 'TEXT');
+  ensureColumn('live_sessions', 'brand_assistant_status', 'TEXT');
   ensureColumn('live_sessions', 'plan_notes', 'TEXT');
   ensureColumn('live_sessions', 'execution_notes', 'TEXT');
   ensureColumn('live_sessions', 'cost_notes', 'TEXT');

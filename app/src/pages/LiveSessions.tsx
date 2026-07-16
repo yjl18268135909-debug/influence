@@ -240,7 +240,7 @@ interface LiveSessionsProps {
 }
 
 type SessionFilters = { influencer?: string; brand?: string; city?: string; dateRange?: [string, string] };
-type InlineScheduleField = 'live_venue' | 'owner' | 'assistant' | 'expected_gmv' | 'travel_cost_share' | 'brand_commission_rate' | 'influencer_commission_rate' | 'actual_gmv_sgd' | 'actual_received_gmv_sgd';
+type InlineScheduleField = 'live_venue' | 'owner' | 'assistant' | 'brand_assistant_status' | 'expected_gmv' | 'travel_cost_share' | 'brand_commission_rate' | 'influencer_commission_rate' | 'actual_gmv_sgd' | 'actual_received_gmv_sgd';
 
 const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }) => {
   const navigate = useNavigate();
@@ -283,6 +283,16 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const scheduleRef = useRef<HTMLDivElement | null>(null);
   const watchedMerchantId = Form.useWatch('merchant_id', form);
   const filters = filtersByScope[filterScope] || {};
+  const brandAssistantStatusOptions = ['强助播', '一般助播', '无助播'];
+
+  const normalizeBrandAssistantStatus = (value?: string) => {
+    const normalizedValue = String(value || '').trim();
+    if (!normalizedValue) return '';
+    if (normalizedValue === '是（强助播）' || normalizedValue === '是') return '强助播';
+    if (normalizedValue === '是（一般助播）') return '一般助播';
+    if (normalizedValue === '否') return '无助播';
+    return normalizedValue;
+  };
   const setCurrentFilters = (updater: SessionFilters | ((prev: SessionFilters) => SessionFilters)) => {
     setFiltersByScope((prev) => ({
       ...prev,
@@ -597,11 +607,27 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return merchant?.category || '未填写';
   };
 
+  const getMerchantAssistantStatus = (merchantId?: number | string, merchantName?: string) => {
+    const merchant = merchants.find((item) => {
+      const itemId = item.id || item._id;
+      return (merchantId && String(itemId) === String(merchantId))
+        || (merchantName && item.name === merchantName);
+    });
+    return normalizeBrandAssistantStatus(merchant?.has_strong_assistant);
+  };
+
   const getSessionBrandCategory = (item: any) => {
     if (!isEmptyDisplayValue(item.brand_category)) return item.brand_category;
     if (!isEmptyDisplayValue(item.merchant_category)) return item.merchant_category;
     return getMerchantCategory(item.merchant_id, item.merchant_name);
   };
+
+  const getSessionBrandAssistantStatus = (item: any) => {
+    if (!isEmptyDisplayValue(item.brand_assistant_status)) return normalizeBrandAssistantStatus(item.brand_assistant_status);
+    if (!isEmptyDisplayValue(item.merchant_has_strong_assistant)) return normalizeBrandAssistantStatus(item.merchant_has_strong_assistant);
+    return getMerchantAssistantStatus(item.merchant_id, item.merchant_name);
+  };
+
   const getSessionBrandCooperationMode = (item: any) => {
     if (!isEmptyDisplayValue(item.brand_cooperation_mode)) return item.brand_cooperation_mode;
     if (!isEmptyDisplayValue(item.merchant_cooperation_mode)) return item.merchant_cooperation_mode;
@@ -720,6 +746,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         || (matchedMerchant ? (matchedMerchant.id || matchedMerchant._id) : (record.merchant_name ? customBrandValue(record.merchant_name) : undefined)),
       brand_category: isEmptyDisplayValue(record.brand_category) ? getMerchantCategory(record.merchant_id, record.merchant_name) : record.brand_category,
       brand_cooperation_mode: isEmptyDisplayValue(record.brand_cooperation_mode) ? getMerchantCooperationMode(record.merchant_id, record.merchant_name) : record.brand_cooperation_mode,
+      brand_assistant_status: getSessionBrandAssistantStatus(record) || undefined,
       session_date: hasSessionTime(record.session_date) ? dayjs(record.session_date) : undefined,
       cargo_sheet: record.cargo_sheet || getMerchantCargoSheet(record.merchant_id, record.merchant_name),
       big_screen_screenshot: record.big_screen_screenshot ? [{ uid: '-1', name: record.big_screen_screenshot, status: 'done' }] : [],
@@ -763,6 +790,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         cargo_sheet: values.cargo_sheet || getMerchantCargoSheet(merchantId, merchantName),
         brand_category: isEmptyDisplayValue(values.brand_category) ? getMerchantCategory(merchantId, merchantName) : values.brand_category,
         brand_cooperation_mode: isEmptyDisplayValue(values.brand_cooperation_mode) ? getMerchantCooperationMode(merchantId, merchantName) : values.brand_cooperation_mode,
+        brand_assistant_status: isEmptyDisplayValue(values.brand_assistant_status) ? getMerchantAssistantStatus(merchantId, merchantName) : normalizeBrandAssistantStatus(values.brand_assistant_status),
         influencer_commission_rate: normalizeCommissionRateForStorage(values.influencer_commission_rate),
         brand_commission_rate: normalizeCommissionRateForStorage(values.brand_commission_rate),
         big_screen_screenshot: screenshotFiles.map((file: any) => file.name).join(', '),
@@ -870,11 +898,12 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
 
   const startInlineEdit = (record: any, field: InlineScheduleField) => {
     setInlineEditing({ sessionKey: getInlineSessionKey(record), field });
-    setInlineValue(record[field] || '');
+    setInlineValue(field === 'brand_assistant_status' ? getSessionBrandAssistantStatus(record) : (record[field] || ''));
   };
 
   const saveInlineEdit = async (record: any, field: InlineScheduleField, nextValue: string | string[] = inlineValue) => {
-    const normalizedValue = Array.isArray(nextValue) ? nextValue[0] : nextValue;
+    const rawValue = Array.isArray(nextValue) ? nextValue[0] : nextValue;
+    const normalizedValue = field === 'brand_assistant_status' ? normalizeBrandAssistantStatus(rawValue) : rawValue;
     const payload = {
       ...record,
       [field]: normalizedValue || null,
@@ -1025,7 +1054,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
   const renderInlineScheduleField = (record: any, field: InlineScheduleField, label: string) => {
     const sessionKey = getInlineSessionKey(record);
     const isEditing = inlineEditing?.sessionKey === sessionKey && inlineEditing.field === field;
-    const displayValue = record[field] || '未安排';
+    const displayValue = field === 'brand_assistant_status'
+      ? (getSessionBrandAssistantStatus(record) || '未填写')
+      : (record[field] || '未安排');
 
     if (isEditing && field === 'owner') {
       return (
@@ -1048,6 +1079,31 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
           >
             {employees.filter((item) => item.status === 'active').map((item) => (
               <Option key={item.id} value={item.name}>{item.name} ({item.role})</Option>
+            ))}
+          </Select>
+        </div>
+      );
+    }
+
+    if (isEditing && field === 'brand_assistant_status') {
+      return (
+        <div className="schedule-session-inline-editor" onClick={(event) => event.stopPropagation()}>
+          <span>{label}：</span>
+          <Select
+            autoFocus
+            open
+            allowClear
+            size="small"
+            value={inlineValue || undefined}
+            placeholder="选择助播信息"
+            onChange={(value) => saveInlineEdit(record, field, value || '')}
+            onBlur={() => {
+              setInlineEditing(null);
+              setInlineValue('');
+            }}
+          >
+            {brandAssistantStatusOptions.map((option) => (
+              <Option key={option} value={option}>{option}</Option>
             ))}
           </Select>
         </div>
@@ -2431,6 +2487,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                         <span className="schedule-session-mode">
                           {getSessionBrandCategory(item)}
                         </span>
+                        {renderInlineScheduleField(item, 'brand_assistant_status', '助播信息')}
                         {renderInlineMetricField(item, 'expected_gmv', '目标GMV', Number(item.expected_gmv || 0))}
                         {showTravelCostShare ? renderInlineMetricField(item, 'travel_cost_share', '机酒均摊', Number(item.travel_cost_share || 0)) : null}
                       </>
@@ -2764,6 +2821,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                         merchant_name: merchant?.name || undefined,
                         brand_category: merchant?.category || undefined,
                         brand_cooperation_mode: merchant?.cooperation_mode || undefined,
+                        brand_assistant_status: normalizeBrandAssistantStatus(merchant?.has_strong_assistant) || undefined,
                         brand_commission_rate: normalizeCommissionRateForDisplay(merchant?.commission_rate ?? form.getFieldValue('brand_commission_rate') ?? 0),
                       });
                       setBrandSearchText(merchant?.name || '');
@@ -2787,6 +2845,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                 </Form.Item>
               </Col>
               <Form.Item name="merchant_name" hidden>
+                <Input />
+              </Form.Item>
+              <Form.Item name="brand_assistant_status" hidden>
                 <Input />
               </Form.Item>
               <Col xs={24} md={12}>
