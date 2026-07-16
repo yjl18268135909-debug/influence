@@ -1102,7 +1102,7 @@ function liveSessionValues(data, influencerId, merchantId) {
     data.viewers || 0,
     data.gmv || 0,
     data.orders_count || 0,
-    data.status || 'completed',
+    data.status || 'scheduled',
     data.notes || null,
     data.cargo_sheet || null,
     data.traffic_plan || null,

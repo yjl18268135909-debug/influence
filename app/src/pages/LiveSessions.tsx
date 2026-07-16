@@ -388,6 +388,33 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     return items.reduce((sum, item) => sum + Number(item.actual_gmv_sgd || 0), 0);
   };
 
+  const hasPostLiveData = (item: any) => {
+    return [
+      item.actual_gmv_sgd,
+      item.actual_received_gmv_sgd,
+      item.actual_traffic_usd,
+      item.screen_traffic_sgd,
+      item.traffic_receivable_amount,
+      item.received_amount,
+    ].some((value) => Number(value || 0) > 0)
+      || Boolean(item.big_screen_screenshot)
+      || Boolean(item.actual_traffic_provider)
+      || Boolean(item.traffic_notes)
+      || Boolean(item.post_live_notes)
+      || Boolean(item.payment_notes);
+  };
+
+  const getSessionDisplayStatus = (item: any) => {
+    if (item.status === 'cancelled' || item.status === 'live') return item.status;
+    return hasPostLiveData(item) ? 'completed' : 'scheduled';
+  };
+
+  const renderSessionStatusTag = (_status: string, record: any) => {
+    const displayStatus = getSessionDisplayStatus(record);
+    const meta = statusMeta[displayStatus] || statusMeta.scheduled;
+    return <Tag color={meta.color}>{meta.text}</Tag>;
+  };
+
   const timelineDays = useMemo(() => {
     const start = timelineWeek.startOf('day');
     const days = 31;
@@ -1034,7 +1061,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       samples: item.samples || '未填写',
       influencer_travel_note: item.influencer_travel_note || '',
       notes: item.notes || '',
-      status: statusMeta[item.status]?.text || item.status || '待开始',
+      status: statusMeta[getSessionDisplayStatus(item)]?.text || '待开始',
     };
     return values[field] ?? '';
   };
@@ -1332,7 +1359,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       <div className={`calendar-session-list ${daySessions.length ? 'calendar-session-filled' : 'calendar-session-empty'}`}>
         {daySessions.length ? <div className="calendar-session-count">共 {daySessions.length} 场</div> : null}
         {daySessions.map((item) => {
-          const meta = statusMeta[item.status] || statusMeta.scheduled;
+          const meta = statusMeta[getSessionDisplayStatus(item)] || statusMeta.scheduled;
           const ownerColor = getEmployeeColor(item.owner);
           const ownerStyle = ownerColor === 'default'
             ? { color: 'rgba(0, 0, 0, 0.55)', borderColor: '#d9d9d9', background: '#fafafa' }
@@ -1457,10 +1484,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status: string) => {
-        const meta = statusMeta[status] || statusMeta.scheduled;
-        return <Tag color={meta.color}>{meta.text}</Tag>;
-      },
+      render: renderSessionStatusTag,
     },
     operationColumn,
   ];
@@ -1542,10 +1566,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status: string) => {
-        const meta = statusMeta[status] || statusMeta.scheduled;
-        return <Tag color={meta.color}>{meta.text}</Tag>;
-      },
+      render: renderSessionStatusTag,
     },
   ];
 
@@ -1689,10 +1710,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      render: (status: string) => {
-        const meta = statusMeta[status] || statusMeta.scheduled;
-        return <Tag color={meta.color}>{meta.text}</Tag>;
-      },
+      render: renderSessionStatusTag,
     },
     operationColumn,
   ];
@@ -2501,10 +2519,10 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         {!communicationOnly && (
           <>
             <Col xs={24} sm={12} lg={3}>
-              <Statistic title="待开始" value={currentMonthSessions.filter((item) => item.status === 'scheduled').length} />
+              <Statistic title="待开始" value={currentMonthSessions.filter((item) => getSessionDisplayStatus(item) === 'scheduled').length} />
             </Col>
             <Col xs={24} sm={12} lg={3}>
-              <Statistic title="已完成" value={currentMonthSessions.filter((item) => item.status === 'completed').length} />
+              <Statistic title="已完成" value={currentMonthSessions.filter((item) => getSessionDisplayStatus(item) === 'completed').length} />
             </Col>
           </>
         )}
