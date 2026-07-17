@@ -120,6 +120,8 @@ const isEveningSession = (item: any) => {
 const splitSessionsByPeriod = (items: any[]) => {
   const daytime: any[] = [];
   const evening: any[] = [];
+  const untimedItems = items.filter((item) => !hasSessionTime(item.session_date));
+  const singleUntimedSession = items.length === 1 && untimedItems.length === 1;
   let untimedIndex = 0;
 
   items.forEach((item) => {
@@ -129,6 +131,11 @@ const splitSessionsByPeriod = (items: any[]) => {
       } else {
         daytime.push(item);
       }
+      return;
+    }
+
+    if (singleUntimedSession) {
+      evening.push(item);
       return;
     }
 
