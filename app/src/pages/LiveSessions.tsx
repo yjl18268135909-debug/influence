@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Badge, Button, Calendar, Checkbox, Col, DatePicker, Descriptions, Form, Input, InputNumber, Modal, Popconfirm, Radio, Row, Select, Slider, Space, Statistic, Table, Tabs, Tag, Upload, message } from 'antd';
 import { DeleteOutlined, EditOutlined, ExportOutlined, PlusOutlined, ReloadOutlined, UploadOutlined, ZoomInOutlined, ZoomOutOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
@@ -575,8 +575,9 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     } as React.CSSProperties;
   };
 
-  useEffect(() => {
-    const frameId = requestAnimationFrame(() => {
+  useLayoutEffect(() => {
+    let frameId = 0;
+    const measurePeriodHeights = () => {
       const nextHeights: RowPeriodHeights = {};
       const slots = Array.from(document.querySelectorAll<HTMLElement>('[data-period-row][data-period-variant][data-period-part]'));
 
@@ -592,7 +593,7 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         const paddingTop = Number.parseFloat(style.paddingTop || '0') || 0;
         const paddingBottom = Number.parseFloat(style.paddingBottom || '0') || 0;
         const childHeight = Array.from(slot.children).reduce((sum, child, index) => (
-          sum + (child as HTMLElement).offsetHeight + (index > 0 ? gap : 0)
+          sum + (child as HTMLElement).getBoundingClientRect().height + (index > 0 ? gap : 0)
         ), 0);
         const zoom = variant === 'schedule' ? scheduleZoom / 100 : 1;
         const minHeight = Math.max(56, Math.ceil(78 * zoom));
@@ -608,9 +609,21 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       setMeasuredPeriodHeights((prev) => (
         JSON.stringify(prev) === JSON.stringify(nextHeights) ? prev : nextHeights
       ));
+    };
+
+    frameId = requestAnimationFrame(measurePeriodHeights);
+    const observer = new ResizeObserver(() => {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(measurePeriodHeights);
     });
 
-    return () => cancelAnimationFrame(frameId);
+    document.querySelectorAll<HTMLElement>('[data-period-row][data-period-variant][data-period-part]')
+      .forEach((slot) => observer.observe(slot));
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      observer.disconnect();
+    };
   }, [filteredSessions, postDataInfluencers, scheduleZoom, timelineInfluencers, timelineDays]);
 
   const getEmployeeColor = (employeeName?: string) => {

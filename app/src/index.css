@@ -748,7 +748,9 @@ code {
 }
 
 .schedule-period-slots-split {
-  grid-template-rows: var(--schedule-daytime-slot-height, auto) var(--schedule-evening-slot-height, auto);
+  grid-template-rows:
+    minmax(var(--schedule-daytime-slot-height, 0px), auto)
+    minmax(var(--schedule-evening-slot-height, 0px), auto);
 }
 
 .schedule-period-slots-single {
@@ -767,9 +769,17 @@ code {
   min-height: var(--schedule-period-min-height);
 }
 
+.schedule-period-slots-split .schedule-period-slot-daytime {
+  min-height: var(--schedule-daytime-slot-height, var(--schedule-period-min-height));
+}
+
+.schedule-period-slots-split .schedule-period-slot-evening {
+  min-height: var(--schedule-evening-slot-height, var(--schedule-period-min-height));
+}
+
 .schedule-period-slot-evening {
-  padding-top: 8px;
-  border-top: 1px dashed #e5e7eb;
+  padding-top: 10px;
+  border-top: 1px dashed #bfbfbf;
 }
 
 .schedule-period-slot-evening-only {
