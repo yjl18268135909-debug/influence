@@ -869,12 +869,12 @@ code {
 .schedule-session-action-confirmed {
   color: #cf1322;
   font-weight: 600;
-  cursor: default;
+  cursor: pointer;
 }
 
 .schedule-session-action-confirmed:hover {
   color: #cf1322;
-  text-decoration: none;
+  text-decoration: underline;
 }
 
 .schedule-session-mode {

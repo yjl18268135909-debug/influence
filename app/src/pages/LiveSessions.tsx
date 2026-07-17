@@ -869,10 +869,11 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
     }
   };
 
-  const handleConfirmSession = async (record: any) => {
+  const handleToggleConfirmSession = async (record: any) => {
+    const nextConfirmed = !isSessionConfirmed(record);
     const payload = {
       ...record,
-      is_confirmed: true,
+      is_confirmed: nextConfirmed,
     };
 
     try {
@@ -880,10 +881,10 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         await liveSessionApi.update(record.id, payload);
       }
       setSessions((prev) => prev.map((item) => getInlineSessionKey(item) === getInlineSessionKey(record) ? payload : item));
-      message.success('场次已确认');
+      message.success(nextConfirmed ? '场次已确认' : '已取消确认');
     } catch (error) {
-      console.error('确认场次失败:', error);
-      message.error('确认失败');
+      console.error('更新确认状态失败:', error);
+      message.error('更新确认状态失败');
     }
   };
 
@@ -2537,14 +2538,12 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
                         tabIndex={0}
                         onClick={(event) => {
                           event.stopPropagation();
-                          if (!isSessionConfirmed(item)) {
-                            handleConfirmSession(item);
-                          }
+                          handleToggleConfirmSession(item);
                         }}
                         onKeyDown={(event) => {
                           event.stopPropagation();
-                          if ((event.key === 'Enter' || event.key === ' ') && !isSessionConfirmed(item)) {
-                            handleConfirmSession(item);
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            handleToggleConfirmSession(item);
                           }
                         }}
                       >
