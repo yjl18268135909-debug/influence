@@ -117,6 +117,32 @@ const isEveningSession = (item: any) => {
   return dayjs(item.session_date).hour() >= 18;
 };
 
+const splitSessionsByPeriod = (items: any[]) => {
+  const daytime: any[] = [];
+  const evening: any[] = [];
+  let untimedIndex = 0;
+
+  items.forEach((item) => {
+    if (hasSessionTime(item.session_date)) {
+      if (isEveningSession(item)) {
+        evening.push(item);
+      } else {
+        daytime.push(item);
+      }
+      return;
+    }
+
+    if (untimedIndex % 2 === 0) {
+      daytime.push(item);
+    } else {
+      evening.push(item);
+    }
+    untimedIndex += 1;
+  });
+
+  return { daytime, evening };
+};
+
 const getSessionInterval = (item: any) => {
   if (!hasSessionTime(item.session_date)) return null;
   const duration = Number(item.duration_hours || 0);
@@ -550,13 +576,14 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
       const sessionItems = variant === 'schedule'
         ? dayItems.filter((item) => !isTravelNoteOnly(item))
         : dayItems;
+      const { daytime, evening } = splitSessionsByPeriod(sessionItems);
       daytimeHeight = Math.max(
         daytimeHeight,
-        estimateSlotHeight(sessionItems.filter((item) => !isEveningSession(item)), variant, zoomFactor),
+        estimateSlotHeight(daytime, variant, zoomFactor),
       );
       eveningHeight = Math.max(
         eveningHeight,
-        estimateSlotHeight(sessionItems.filter((item) => isEveningSession(item)), variant, zoomFactor),
+        estimateSlotHeight(evening, variant, zoomFactor),
       );
     });
 
@@ -2236,9 +2263,12 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         {postDataInfluencers.map((name) => {
           const influencerPostDataItems = getPostDataSessionsForInfluencer(name);
           const rowPeriodSlotStyle = getRowPeriodSlotStyle(influencerPostDataItems, 'post-data', 1, name);
-          const rowHasDaytimeSessions = influencerPostDataItems.some((item) => !isEveningSession(item));
-          const rowHasEveningSessions = influencerPostDataItems.some((item) => isEveningSession(item));
-          const rowHasBothSessionPeriods = rowHasDaytimeSessions && rowHasEveningSessions;
+          const rowHasBothSessionPeriods = timelineDays.some((day) => {
+            const { daytime, evening } = splitSessionsByPeriod(
+              influencerPostDataItems.filter((item) => isSessionOnDay(item, day)),
+            );
+            return daytime.length > 0 && evening.length > 0;
+          });
 
           return (
             <React.Fragment key={`post-${name}`}>
@@ -2248,9 +2278,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
               </div>
               {timelineDays.map((day) => {
               const dayItems = influencerPostDataItems.filter((item) => isSessionOnDay(item, day));
-              const daytimeItems = dayItems.filter((item) => !isEveningSession(item));
-              const eveningItems = dayItems.filter((item) => isEveningSession(item));
-              const shouldSplitSessionPeriods = rowHasBothSessionPeriods || (daytimeItems.length > 0 && eveningItems.length > 0);
+              const { daytime: daytimeItems, evening: eveningItems } = splitSessionsByPeriod(dayItems);
+              const shouldSplitSessionPeriods = rowHasBothSessionPeriods;
               const renderPostDataCard = (item: any) => (
                 <div
                   key={item.id || `${item.session_date}-${item.merchant_name}`}
@@ -2443,10 +2472,13 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
         {timelineInfluencers.map((name) => {
           const influencerTimelineItems = getSessionsForInfluencer(name);
           const rowPeriodSlotStyle = getRowPeriodSlotStyle(influencerTimelineItems, 'schedule', scheduleZoom / 100, name);
-          const rowSessionItems = influencerTimelineItems.filter((item) => !isTravelNoteOnly(item));
-          const rowHasDaytimeSessions = rowSessionItems.some((item) => !isEveningSession(item));
-          const rowHasEveningSessions = rowSessionItems.some((item) => isEveningSession(item));
-          const rowHasBothSessionPeriods = rowHasDaytimeSessions && rowHasEveningSessions;
+          const rowHasBothSessionPeriods = timelineDays.some((day) => {
+            const daySessions = influencerTimelineItems.filter((item) => (
+              isSessionOnDay(item, day) && !isTravelNoteOnly(item)
+            ));
+            const { daytime, evening } = splitSessionsByPeriod(daySessions);
+            return daytime.length > 0 && evening.length > 0;
+          });
 
           return (
             <React.Fragment key={name}>
@@ -2461,9 +2493,8 @@ const LiveSessions: React.FC<LiveSessionsProps> = ({ communicationOnly = false }
               const standaloneTravelNotes = dayItems.filter((item) => isTravelNoteOnly(item) && item.influencer_travel_note);
               const sessionTravelNotes = dayItems.filter((item) => !isTravelNoteOnly(item) && item.influencer_travel_note);
               const daySessions = dayItems.filter((item) => !isTravelNoteOnly(item));
-              const daytimeSessions = daySessions.filter((item) => !isEveningSession(item));
-              const eveningSessions = daySessions.filter((item) => isEveningSession(item));
-              const shouldSplitSessionPeriods = rowHasBothSessionPeriods || (daytimeSessions.length > 0 && eveningSessions.length > 0);
+              const { daytime: daytimeSessions, evening: eveningSessions } = splitSessionsByPeriod(daySessions);
+              const shouldSplitSessionPeriods = rowHasBothSessionPeriods;
               const renderTravelNoteBlock = (item: any) => (
                 <div
                   key={`travel-${item.id || `${item.session_date}-${item.influencer_name}`}`}
