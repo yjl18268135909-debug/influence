@@ -11,6 +11,7 @@ import {
   Space,
   Statistic,
   Table,
+  Tabs,
   Typography,
   message,
   Segmented,
@@ -18,7 +19,7 @@ import {
 import { ReloadOutlined, SaveOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs, { Dayjs } from 'dayjs';
-import { dashboardApi, influencerApi, liveSessionApi } from '../api';
+import { dashboardApi, influencerApi, liveSessionApi, merchantApi } from '../api';
 
 const { RangePicker } = DatePicker;
 const { Title, Text } = Typography;
@@ -31,6 +32,12 @@ type Influencer = {
   platform?: string;
 };
 
+type Merchant = {
+  id: number;
+  merchant_name?: string;
+  name?: string;
+};
+
 type LiveSession = {
   id: number;
   session_date: string;
@@ -39,6 +46,7 @@ type LiveSession = {
   merchant_name?: string;
   expected_gmv?: number | string;
   actual_gmv_sgd?: number | string;
+  actual_received_gmv_sgd?: number | string;
   status?: string;
   schedule_type?: string;
 };
@@ -46,6 +54,18 @@ type LiveSession = {
 type DashboardTarget = {
   received_target_gmv: number;
   sales_gmv: number;
+};
+
+type PerformanceRow = {
+  key: string;
+  primaryName: string;
+  secondaryName: string;
+  sessionCount: number;
+  expectedGmv: number;
+  actualGmv: number;
+  receivedGmv: number;
+  completionRate: number;
+  averageGmv: number;
 };
 
 const dimensionOptions = [
@@ -67,6 +87,11 @@ const formatMoney = (value: number) => value.toLocaleString('en-US', {
   maximumFractionDigits: 2,
 });
 
+const formatBrandName = (value?: string | null) => {
+  if (!value || value === '未填写品牌') return '未添加品牌信息';
+  return value;
+};
+
 const getRangeByDimension = (dimension: Dimension): [Dayjs, Dayjs] => {
   const now = dayjs();
   if (dimension === 'day') return [now.startOf('day'), now.endOf('day')];
@@ -85,7 +110,9 @@ const DataDashboard: React.FC = () => {
   const [dimension, setDimension] = useState<Dimension>('month');
   const [range, setRange] = useState<[Dayjs, Dayjs]>(getRangeByDimension('month'));
   const [influencerId, setInfluencerId] = useState<number | undefined>();
+  const [merchantName, setMerchantName] = useState<string | undefined>();
   const [influencers, setInfluencers] = useState<Influencer[]>([]);
+  const [merchants, setMerchants] = useState<Merchant[]>([]);
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [target, setTarget] = useState<DashboardTarget>({ received_target_gmv: 0, sales_gmv: 0 });
   const [loading, setLoading] = useState(false);
@@ -102,8 +129,9 @@ const DataDashboard: React.FC = () => {
   const loadDashboard = async () => {
     setLoading(true);
     try {
-      const [influencerRes, sessionRes, targetRes] = await Promise.all([
+      const [influencerRes, merchantRes, sessionRes, targetRes] = await Promise.all([
         influencerApi.getAll(),
+        merchantApi.getAll(),
         liveSessionApi.getAll({
           startDate: `${range[0].format('YYYY-MM-DD')} 00:00:00`,
           endDate: `${range[1].format('YYYY-MM-DD')} 23:59:59`,
@@ -113,6 +141,7 @@ const DataDashboard: React.FC = () => {
       ]);
 
       setInfluencers(influencerRes.data.data || []);
+      setMerchants(merchantRes.data.data || []);
       setSessions(sessionRes.data.data || []);
       const nextTarget = {
         received_target_gmv: toNumber(targetRes.data.data?.received_target_gmv),
@@ -133,8 +162,27 @@ const DataDashboard: React.FC = () => {
   }, [queryParams]);
 
   const validSessions = useMemo(() => {
-    return sessions.filter((session) => session.schedule_type !== 'travel_note' && session.status !== 'deleted');
-  }, [sessions]);
+    return sessions.filter((session) => {
+      if (session.schedule_type === 'travel_note' || session.status === 'deleted') return false;
+      if (merchantName && formatBrandName(session.merchant_name) !== merchantName) return false;
+      return true;
+    });
+  }, [merchantName, sessions]);
+
+  const merchantOptions = useMemo(() => {
+    const names = new Set<string>();
+    merchants.forEach((merchant) => {
+      const name = formatBrandName(merchant.merchant_name || merchant.name);
+      if (name !== '未添加品牌信息') names.add(name);
+    });
+    sessions.forEach((session) => {
+      const name = formatBrandName(session.merchant_name);
+      if (name !== '未添加品牌信息') names.add(name);
+    });
+    return Array.from(names)
+      .sort((a, b) => a.localeCompare(b, 'zh-Hans-CN'))
+      .map((name) => ({ label: name, value: name }));
+  }, [merchants, sessions]);
 
   const metrics = useMemo(() => {
     const completedGmv = validSessions.reduce((sum, session) => sum + toNumber(session.actual_gmv_sgd), 0);
@@ -157,6 +205,50 @@ const DataDashboard: React.FC = () => {
       projectedCompletion,
     };
   }, [target, validSessions]);
+
+  const buildPerformanceRows = (
+    primaryGetter: (session: LiveSession) => string,
+    secondaryGetter: (session: LiveSession) => string,
+  ) => {
+    const rowMap = new Map<string, PerformanceRow>();
+
+    validSessions.forEach((session) => {
+      const primaryName = primaryGetter(session);
+      const secondaryName = secondaryGetter(session);
+      const key = `${primaryName}__${secondaryName}`;
+      const current = rowMap.get(key) || {
+        key,
+        primaryName,
+        secondaryName,
+        sessionCount: 0,
+        expectedGmv: 0,
+        actualGmv: 0,
+        receivedGmv: 0,
+        completionRate: 0,
+        averageGmv: 0,
+      };
+
+      current.sessionCount += 1;
+      current.expectedGmv += toNumber(session.expected_gmv);
+      current.actualGmv += toNumber(session.actual_gmv_sgd);
+      current.receivedGmv += toNumber(session.actual_received_gmv_sgd);
+      current.completionRate = current.expectedGmv > 0 ? (current.actualGmv / current.expectedGmv) * 100 : 0;
+      current.averageGmv = current.sessionCount > 0 ? current.actualGmv / current.sessionCount : 0;
+      rowMap.set(key, current);
+    });
+
+    return Array.from(rowMap.values()).sort((a, b) => b.actualGmv - a.actualGmv);
+  };
+
+  const brandInfluencerRows = useMemo(() => buildPerformanceRows(
+    (session) => formatBrandName(session.merchant_name),
+    (session) => session.influencer_name || '未填写达人',
+  ), [validSessions]);
+
+  const influencerBrandRows = useMemo(() => buildPerformanceRows(
+    (session) => session.influencer_name || '未填写达人',
+    (session) => formatBrandName(session.merchant_name),
+  ), [validSessions]);
 
   const handleDimensionChange = (value: string | number) => {
     const nextDimension = value as Dimension;
@@ -231,41 +323,70 @@ const DataDashboard: React.FC = () => {
     },
   ];
 
-  return (
-    <div>
-      <Title level={2}>数据看板</Title>
+  const createPerformanceColumns = (primaryTitle: string, secondaryTitle: string): ColumnsType<PerformanceRow> => [
+    {
+      title: primaryTitle,
+      dataIndex: 'primaryName',
+      width: 180,
+      fixed: 'left',
+    },
+    {
+      title: secondaryTitle,
+      dataIndex: 'secondaryName',
+      width: 180,
+    },
+    {
+      title: '场次数',
+      dataIndex: 'sessionCount',
+      width: 100,
+      align: 'right',
+      sorter: (a, b) => a.sessionCount - b.sessionCount,
+    },
+    {
+      title: '目标GMV',
+      dataIndex: 'expectedGmv',
+      width: 140,
+      align: 'right',
+      render: (value: number) => `SGD ${formatMoney(value)}`,
+      sorter: (a, b) => a.expectedGmv - b.expectedGmv,
+    },
+    {
+      title: '本场GMV',
+      dataIndex: 'actualGmv',
+      width: 140,
+      align: 'right',
+      render: (value: number) => `SGD ${formatMoney(value)}`,
+      sorter: (a, b) => a.actualGmv - b.actualGmv,
+      defaultSortOrder: 'descend',
+    },
+    {
+      title: '实收GMV',
+      dataIndex: 'receivedGmv',
+      width: 140,
+      align: 'right',
+      render: (value: number) => `SGD ${formatMoney(value)}`,
+      sorter: (a, b) => a.receivedGmv - b.receivedGmv,
+    },
+    {
+      title: '目标达成率',
+      dataIndex: 'completionRate',
+      width: 130,
+      align: 'right',
+      render: (value: number) => `${value.toFixed(2)}%`,
+      sorter: (a, b) => a.completionRate - b.completionRate,
+    },
+    {
+      title: '场均GMV',
+      dataIndex: 'averageGmv',
+      width: 140,
+      align: 'right',
+      render: (value: number) => `SGD ${formatMoney(value)}`,
+      sorter: (a, b) => a.averageGmv - b.averageGmv,
+    },
+  ];
 
-      <Card style={{ marginBottom: 16 }}>
-        <Space size={12} wrap>
-          <Segmented
-            options={dimensionOptions}
-            value={dimension}
-            onChange={handleDimensionChange}
-          />
-          <RangePicker
-            value={range}
-            onChange={handleRangeChange}
-            allowClear={false}
-          />
-          <Select
-            allowClear
-            showSearch
-            style={{ width: 220 }}
-            placeholder="按达人筛选"
-            optionFilterProp="label"
-            value={influencerId}
-            onChange={setInfluencerId}
-            options={influencers.map((influencer) => ({
-              label: `${influencer.name}${influencer.platform ? ` (${influencer.platform})` : ''}`,
-              value: influencer.id,
-            }))}
-          />
-          <Button icon={<ReloadOutlined />} onClick={loadDashboard} loading={loading}>
-            刷新
-          </Button>
-        </Space>
-      </Card>
-
+  const overviewContent = (
+    <>
       <Card style={{ marginBottom: 16 }}>
         <Form
           form={form}
@@ -335,6 +456,95 @@ const DataDashboard: React.FC = () => {
           scroll={{ x: 900 }}
         />
       </Card>
+    </>
+  );
+
+  const performanceContent = (
+    <Row gutter={[16, 16]}>
+      <Col xs={24}>
+        <Card
+          title="从品牌看达人表现"
+          extra={<Text type="secondary">按本场GMV由高到低排序</Text>}
+        >
+          <Table
+            rowKey="key"
+            loading={loading}
+            columns={createPerformanceColumns('品牌', '达人')}
+            dataSource={brandInfluencerRows}
+            pagination={{ pageSize: 10 }}
+            scroll={{ x: 1150 }}
+          />
+        </Card>
+      </Col>
+      <Col xs={24}>
+        <Card
+          title="从达人看品牌表现"
+          extra={<Text type="secondary">按本场GMV由高到低排序</Text>}
+        >
+          <Table
+            rowKey="key"
+            loading={loading}
+            columns={createPerformanceColumns('达人', '品牌')}
+            dataSource={influencerBrandRows}
+            pagination={{ pageSize: 10 }}
+            scroll={{ x: 1150 }}
+          />
+        </Card>
+      </Col>
+    </Row>
+  );
+
+  return (
+    <div>
+      <Title level={2}>数据看板</Title>
+
+      <Card style={{ marginBottom: 16 }}>
+        <Space size={12} wrap>
+          <Segmented
+            options={dimensionOptions}
+            value={dimension}
+            onChange={handleDimensionChange}
+          />
+          <RangePicker
+            value={range}
+            onChange={handleRangeChange}
+            allowClear={false}
+          />
+          <Select
+            allowClear
+            showSearch
+            style={{ width: 220 }}
+            placeholder="按达人筛选"
+            optionFilterProp="label"
+            value={influencerId}
+            onChange={setInfluencerId}
+            options={influencers.map((influencer) => ({
+              label: `${influencer.name}${influencer.platform ? ` (${influencer.platform})` : ''}`,
+              value: influencer.id,
+            }))}
+          />
+          <Select
+            allowClear
+            showSearch
+            style={{ width: 240 }}
+            placeholder="按品牌筛选"
+            optionFilterProp="label"
+            value={merchantName}
+            onChange={setMerchantName}
+            options={merchantOptions}
+          />
+          <Button icon={<ReloadOutlined />} onClick={loadDashboard} loading={loading}>
+            刷新
+          </Button>
+        </Space>
+      </Card>
+
+      <Tabs
+        items={[
+          { key: 'overview', label: '经营看板', children: overviewContent },
+          { key: 'performance', label: '品牌达人分析', children: performanceContent },
+        ]}
+      />
     </div>
   );
 };
