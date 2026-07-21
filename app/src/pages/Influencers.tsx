@@ -3,6 +3,7 @@ import { Table, Button, Modal, Form, Input, Select, InputNumber, Space, message,
 import { PlusOutlined, EditOutlined, DeleteOutlined, ReloadOutlined, SearchOutlined, UserOutlined, DollarOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
 import type { ColumnsType } from 'antd/es/table';
 import * as XLSX from 'xlsx';
+import dayjs from 'dayjs';
 import { influencerApi, liveSessionApi } from '../api';
 
 const { Option } = Select;
@@ -231,6 +232,59 @@ const Influencers: React.FC = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '达人导入模板');
     XLSX.writeFile(workbook, '达人导入模板.xlsx');
+  };
+
+  const exportInfluencers = () => {
+    if (!filteredInfluencers.length) {
+      message.info('当前筛选条件下暂无可导出的达人');
+      return;
+    }
+
+    const rows = filteredInfluencers.map((item, index) => {
+      const stats = getInfluencerStats(item.id);
+      return {
+        序号: index + 1,
+        平台: item.platform || '',
+        达人名称: item.name || '',
+        达人分层: item.tier || '',
+        达人账号: item.account || '',
+        达人佣金: formatRatePercent(item.commission_rate),
+        总合作GMV: Number(stats.totalGmv || 0),
+        达人机构: item.agency || '',
+        达人单场数据: item.single_session_data || '',
+        达人选品方向: item.product_direction || '',
+        联系方式: item.contact || '',
+        达人寄样地址: item.sample_address || '',
+        其他备注: item.notes || '',
+        状态: item.status === 'active' ? '活跃' : '停用',
+        创建时间: item.created_at ? dayjs(item.created_at).format('YYYY-MM-DD HH:mm:ss') : '',
+        更新时间: item.updated_at ? dayjs(item.updated_at).format('YYYY-MM-DD HH:mm:ss') : '',
+      };
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet['!cols'] = [
+      { wch: 8 },
+      { wch: 12 },
+      { wch: 18 },
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 18 },
+      { wch: 24 },
+      { wch: 20 },
+      { wch: 20 },
+      { wch: 28 },
+      { wch: 28 },
+      { wch: 10 },
+      { wch: 20 },
+      { wch: 20 },
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, '达人数据');
+    XLSX.writeFile(workbook, `达人数据_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`);
+    message.success(`已导出 ${rows.length} 条达人数据`);
   };
 
   const handleInfluencerImport = async (file: File) => {
@@ -540,6 +594,9 @@ const Influencers: React.FC = () => {
           </Button>
           <Button icon={<DownloadOutlined />} onClick={downloadInfluencerImportTemplate}>
             下载导入模板
+          </Button>
+          <Button icon={<DownloadOutlined />} onClick={exportInfluencers}>
+            导出数据
           </Button>
           <Upload
             accept=".xlsx,.xls,.csv"
